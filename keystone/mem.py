@@ -60,7 +60,8 @@ def adjust(user: str, scores: dict[str, float], modules: list[str]):
     for login, scope, reason, pr, until in rules:
         if login in scores and (scope == "*" or any(m.startswith(scope) for m in modules)):
             scores.pop(login)
-            notes.append(f"skipped {login}: you rejected them on {pr}" + (f" ({reason})" if reason else "") + f", rule expires in {(until - now) // DAY}d")
+            why = f"you told me" if pr == "stated in chat" else f"you rejected them on {pr}"
+            notes.append(f"skipped {login}: {why}" + (f" ({reason})" if reason else "") + f", rule expires in {(until - now) // DAY}d")
     accepted = dict(ro(g, "MATCH (:User {id:$u})-[f:FEEDBACK {verdict:'accept'}]->(p:Person) RETURN p.login, count(f)", {"u": user}))
     for login, n in accepted.items():
         if login in scores:

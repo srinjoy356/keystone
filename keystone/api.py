@@ -13,8 +13,9 @@ from .db import db, kb, ro, graph_name
 
 ROOT = Path(__file__).resolve().parent.parent
 app = FastAPI(title="Keystone")
-HITS: dict[str, deque] = defaultdict(deque)
-LIMIT, WINDOW = 25, 3600
+HITS: dict[str, deque] = defaultdict(deque)          # LLM questions
+CHEAP: dict[str, deque] = defaultdict(deque)         # reads/writes that cost no LLM call
+LIMIT, CHEAP_LIMIT, WINDOW = 25, 150, 3600
 
 
 def client_ip(request: Request) -> str:
@@ -23,11 +24,11 @@ def client_ip(request: Request) -> str:
     return xff.split(",")[0].strip() or (request.client.host if request.client else "?")
 
 
-def limited(ip: str) -> bool:
-    q, now = HITS[ip], time.time()
+def limited(ip: str, store=None, limit: int | None = None) -> bool:
+    q, now = (HITS if store is None else store)[ip], time.time()
     while q and now - q[0] > WINDOW:
         q.popleft()
-    if len(q) >= LIMIT:
+    if len(q) >= (LIMIT if limit is None else limit):
         return True
     q.append(now)
     return False
@@ -58,6 +59,20 @@ class Coord(BaseModel):
     task: str = Field(default="", pattern=r"^([A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}#\d{1,7})?$")
     approve: bool = False
     user: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,40}$")
+
+
+class DemoReviewers(BaseModel):
+    tenant: str = "falkordb"
+    user: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    pr: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}#\d{1,7}$")
+
+
+class DemoLeave(BaseModel):
+    tenant: str = "falkordb"
+    user: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    person: str = Field(pattern=r"^[A-Za-z0-9-]{1,39}$")
+    days: int = Field(default=14, ge=1, le=60)
+    reason: str = Field(default="on leave", max_length=100)
 
 
 class Feedback(BaseModel):
@@ -96,8 +111,31 @@ def feedback(body: Feedback):
 
 
 def guard(request: Request):
-    if limited(client_ip(request)):
+    if limited(client_ip(request), CHEAP, CHEAP_LIMIT):
         raise HTTPException(429, "demo rate limit reached, try again later")
+
+
+def known_tenant(t: str):
+    if graph_name("kb", t) not in db().list_graphs():
+        raise HTTPException(404, "unknown tenant")
+
+
+@app.post("/api/demo/reviewers")
+def d_reviewers(b: DemoReviewers, request: Request):
+    guard(request); known_tenant(b.tenant)
+    return tools.suggest_reviewers(b.tenant, b.pr, n=4, user=b.user)["data"]
+
+
+@app.post("/api/demo/unavailable")
+def d_unavailable(b: DemoLeave, request: Request):
+    guard(request); known_tenant(b.tenant)
+    return tools.remember_unavailable(b.tenant, b.person, b.days, b.reason, user=b.user)["data"]
+
+
+@app.post("/api/demo/forget")
+def d_forget(b: DemoLeave, request: Request):
+    guard(request); known_tenant(b.tenant)
+    return tools.forget_unavailable(b.tenant, b.person, user=b.user)["data"]
 
 
 @app.post("/api/coord/triage")
@@ -132,7 +170,7 @@ def memory(user: str = Query(pattern=r"^[A-Za-z0-9_-]{1,40}$")):
 @app.get("/api/overview")
 def overview(tenant: str = "falkordb"):
     g = kb(tenant)
-    stats = {l: ro(g, f"MATCH (n:{l}) RETURN count(n)")[0][0] for l in ("Person", "PR", "File", "Module", "Decision")}
+    stats = {l: ro(g, f"MATCH (n:{l}) RETURN count(n)")[0][0] for l in ("Person", "PR", "Issue", "Module", "Decision", "Repo")}
     people = ro(g, "MATCH (p:Person) WHERE p.pagerank IS NOT NULL RETURN p.login, p.home, p.pagerank, p.acts ORDER BY p.acts DESC LIMIT 200")
     keep = {p[0] for p in people}
     links = [r for r in ro(g, "MATCH (a:Person)-[c:COLLAB]->(b:Person) WHERE c.n >= 1 RETURN a.login, b.login, c.n") if r[0] in keep and r[1] in keep]
@@ -156,11 +194,11 @@ def riskmap(tenant: str = "falkordb"):
 @app.get("/api/eval")
 def evaluation():
     out = {}
-    for name, key in (("eval_result.json", None), ("qa_eval.json", "qa")):
+    for name, key in (("eval_result.json", None), ("qa_eval.json", "qa"), ("facts.json", "facts")):
         f = ROOT / "data" / name
         if f.exists():
             d = json.loads(f.read_text())
-            out.update(d if key is None else {key: {k: {m: v for m, v in r.items() if m != "rows"} for k, r in d.items()}})
+            out.update(d if key is None else {key: ({k: {m: v for m, v in r.items() if m != "rows"} for k, r in d.items()} if key == "qa" else d)})
     return out
 
 

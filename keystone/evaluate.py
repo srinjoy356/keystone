@@ -123,7 +123,7 @@ def run(tenant="falkordb", repos=None):
         per_repo[repo] = {"n": len(sub), **{k: round(float(metrics(sub, *v)["hit@3"]), 3) for k, v in
                           {"keystone": best, "file_history": BASELINES["file-history (CODEOWNERS/blame-style)"], "vector_only": BASELINES["vector-only (embedding kNN, no graph)"]}.items()}}
     print("per-repo hit@3:", json.dumps(per_repo))
-    out = {"per_repo": per_repo, "best": {"w": best[0], "tau": best[1]}, "n_val": len(val), "n_test": len(test),
+    out = {"gain_vs_file": {"mean": float(np.mean(a - b)), "lo": float(np.percentile(d, 2.5)), "hi": float(np.percentile(d, 97.5))}, "per_repo": per_repo, "best": {"w": best[0], "tau": best[1]}, "n_val": len(val), "n_test": len(test),
            "test": {k: {m: float(v) for m, v in r.items() if not m.startswith("_")} for k, r in rows.items()}}
     (CACHE.parent / "eval_result.json").write_text(json.dumps(out, indent=1))
 
