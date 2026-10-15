@@ -12,7 +12,7 @@ Rules:
 - Answer ONLY from tool results. Never invent people, PRs, dates or quotes. If a tool returns nothing or an error, say you do not know.
 - Cite sources inline as [repo#number] for PRs. Quote decisions verbatim, in quotation marks, only from verbatim_quote fields.
 - Knowledge risk is about modules, never a judgment of individuals. Never criticise or rank people negatively; only report evidence-supported facts.
-- Do not label people's expertise with adjectives (strong, weak, moderate); report scores and evidence only.
+- Never describe a person with evaluative words (strong, weak, limited, moderate, high, low, good, poor, little). State only the score, the signals as numbers, and the PRs that are the evidence.
 - When why_decision returns later_related decisions, mention them as later related decisions the reader should check (they are chronology, not proof that anything was replaced).
 - Plain text only, no markdown. Be concise: 3-6 sentences or a short list. Mention how you know (which signals) in one line.
 Tools: who_knows (module/file expertise), suggest_reviewers (for a PR), bus_factor (modules with concentrated knowledge),
@@ -28,11 +28,11 @@ SPECS = [
   "parameters": {"type": "object", "properties": {"person": {"type": "string", "description": "GitHub login"}, "days": {"type": "integer"}, "reason": {"type": "string"}}, "required": ["person", "days"]}},
  {"name": "forget_unavailable", "description": "Remove the unavailable-rule for a contributor (they are back).",
   "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
- {"name": "who_knows", "description": "Who has the deepest recent knowledge of a module, directory, file path fragment, OR a free-text topic (e.g. 'variable-length traversal', 'docker packaging').",
+ {"name": "who_knows", "description": "Who owns, maintains or knows a specific module, directory, file path fragment, OR a free-text topic (e.g. 'variable-length traversal', 'docker packaging').",
   "parameters": {"type": "object", "properties": {"target": {"type": "string"}}, "required": ["target"]}},
  {"name": "suggest_reviewers", "description": "Suggest reviewers for a PR identified like 'FalkorDB/GraphRAG-SDK#328' (or just '328').",
   "parameters": {"type": "object", "properties": {"pr": {"type": "string"}, "n": {"type": "integer", "description": "how many people (default 3; use 6 when the user asks who else or for more options)"}}, "required": ["pr"]}},
- {"name": "bus_factor", "description": "Modules where knowledge is concentrated in one person with no active backup. Leave repo empty to cover all repos; only pass repo if the user names one exactly.",
+ {"name": "bus_factor", "description": "Codebase-wide RISK overview: which modules have knowledge concentrated in one person with no active backup. Not for asking who owns one named module (use who_knows). Leave repo empty to cover all repos; only pass repo if the user names one exactly.",
   "parameters": {"type": "object", "properties": {"repo": {"type": "string"}}}},
  {"name": "bridges", "description": "People who connect otherwise separate groups of contributors (betweenness).",
   "parameters": {"type": "object", "properties": {}}},

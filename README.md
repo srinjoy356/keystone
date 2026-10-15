@@ -135,9 +135,9 @@ Keystone beats the strongest classic baseline (file history) on hit@3 by **+5.9 
 Other checks (`python -m keystone.qa_eval`):
 
 * **Tool routing:** the agent chose the right tool on 14 of 14 natural-language questions.
-* **Decision retrieval:** for 40 sampled decisions, an LLM wrote a question without reusing the decision's wording; the source PR or issue was in the top 5 for **72.5%** (MRR 0.59).
-* **What did not work** (kept out of the product): adding the PR title to decision embeddings dropped recall@5 to 0.48; fusing decision search with PR-title search (reciprocal rank) left recall flat and lowered MRR (0.42), so decisions use plain embeddings.
-* **Verification cost:** of everything the LLM proposed as a "decision", about three in ten were thrown away because the quote was not in the source or did not support the claim.
+* **Decision retrieval:** for 40 sampled decisions, an LLM wrote a question without reusing the decision's wording; the source PR or issue was in the top 5 for **70%** (MRR 0.55) over a store of 2,220 decisions.
+* **What did not work** (kept out of the product): adding the PR title to decision embeddings dropped recall@5 from 0.73 to 0.48 (measured when the store held 1,634 decisions); fusing decision search with PR-title search (reciprocal rank) left recall flat and lowered MRR (0.42), so decisions use plain embeddings.
+* **Verification cost:** of everything the LLM proposed as a "decision", 27% (1,168 of 4,371 proposals) were thrown away because the quote was not in the source or did not support the claim.
 
 ## The agent
 

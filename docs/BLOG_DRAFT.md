@@ -4,7 +4,7 @@
 
 Every team has a module that one person understands. Nobody notices until that person is on leave, or has moved on, and a pull request sits unreviewed for a week because the three people who could have reviewed it are not who the CODEOWNERS file says they are.
 
-We built Keystone to answer four questions from a codebase's real history: who should review this, who actually knows this module, which modules would lose knowledge if one person left, and why was it decided that way. It is a FalkorDB graph of 7 repositories (4,620 PRs, 2,351 issues, 338 contributors, 1,634 extracted decisions) with an agent on top. Every answer shows its subgraph and the Cypher behind it. [live link] [repo link]
+We built Keystone to answer four questions from a codebase's real history: who should review this, who actually knows this module, which modules would lose knowledge if one person left, and why was it decided that way. It is a FalkorDB graph of 7 repositories (4,620 PRs, 2,351 issues, 338 contributors, 3,203 extracted decisions across two tenants) with an agent on top. Every answer shows its subgraph and the Cypher behind it. [live link] [repo link]
 
 ## The problem is not text search
 
@@ -40,7 +40,7 @@ hit@3 beats file history by 5.9 points (95% bootstrap CI 3.5 to 8.1). It is not 
 * **`shortestPath` is directed only.** Our "how are A and B connected" query failed until we added directed derived edges (`KNOWS`, `KNOWN_BY`, `LINKS`) so the path could alternate person -> module -> person.
 * **`RO_QUERY` on a graph that does not exist yet errors.** Every first-time user hit it. Memory graphs are now created on first use.
 * **Two ideas that made things worse, and we threw them out.** Adding the PR title to decision embeddings dropped retrieval recall@5 from 0.73 to 0.48. Fusing decision search with PR-title search left recall flat and lowered MRR. And we tried to have an LLM mark which decisions superseded which: on a sample we read by hand, about one in three was right, mostly "newer decision adds detail". We replaced it with a dated list of related decisions in the same module and let the reader judge.
-* **Silence is the expensive failure.** The LLM proposes a decision with a quote. Our code keeps it only if the quote is a verbatim substring of the cited message and a second check confirms the quote states the decision. About three in ten proposals were rejected. Without that gate, the very first answer we tested "explained" a design choice from a question someone asked in a review comment.
+* **Silence is the expensive failure.** The LLM proposes a decision with a quote. Our code keeps it only if the quote is a verbatim substring of the cited message and a second check confirms the quote states the decision. 27% of proposals (1,168 of 4,371) were rejected. Without that gate, the very first answer we tested "explained" a design choice from a question someone asked in a review comment.
 
 ## Memory that changes what the agent does
 

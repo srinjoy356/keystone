@@ -12,7 +12,8 @@ for k in sys.argv[1:]:
     blob = loc.dump(k)
     print(k, len(blob) // 1024, "KB dumped", flush=True)
     try:
-        cl.restore(k, 0, blob, replace=True)
+        cl.delete(k)  # free the old copy first: replace-in-place would briefly hold both inside the 100 MB limit
+        cl.restore(k, 0, blob)
         print(k, "restored %.1fs" % (time.time() - t), flush=True)
     except Exception as e:
         print(k, "RESTORE FAIL", str(e)[:200])
