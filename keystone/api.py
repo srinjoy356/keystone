@@ -145,6 +145,11 @@ def risk(tenant: str = "falkordb", repo: str | None = None):
     return {"bus_factor": tools.bus_factor(tenant, repo)["data"], "bridges": tools.bridges(tenant)["data"]}
 
 
+@app.get("/api/riskmap")
+def riskmap(tenant: str = "falkordb"):
+    return tools.risk_map(tenant)
+
+
 @app.get("/api/eval")
 def evaluation():
     out = {}
