@@ -30,7 +30,7 @@ def load(tenant: str, repo: str, kind: str = "prs") -> int:
     for pid, v in data.items():
         for d in v["decisions"]:
             did = hashlib.sha1(f"{pid}|{d['quote']}".encode()).hexdigest()[:12]
-            rows.append({"id": did, "pr": pid, "text": d["decision"], "why": d.get("rationale", ""), "quote": d["quote"],
+            rows.append({"id": did, "pr": pid, "title": v["title"], "text": d["decision"], "why": d.get("rationale", ""), "quote": d["quote"],
                          "who": d["who"], "ts": v["createdAt"]})
     if not rows:
         return 0

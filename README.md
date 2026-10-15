@@ -95,7 +95,24 @@ SET t.status='claimed', t.by=$w, t.claimedAt=$now RETURN t.id
 
 Task: for each merged PR in a later time window, predict who actually reviewed it using **only history before that PR was opened** (`$asof`). Weights are tuned on a separate validation slice; the test slice is untouched. Reproduce with `python -m keystone.evaluate <repos>`.
 
-_(final table inserted at the end of the build)_
+Seven FalkorDB repositories, 542 test PRs from the later part of each repo's history (the first 70% is for tuning, the last 30% is the untouched test slice):
+
+| Method | hit@1 | hit@3 | hit@5 | MRR |
+|---|---|---|---|---|
+| Most popular reviewers (all-time) | 0.25 | 0.79 | 0.95 | 0.52 |
+| Recent reviewers in the repo | 0.40 | 0.89 | 0.96 | 0.64 |
+| File history (CODEOWNERS / blame style) | 0.50 | 0.87 | 0.93 | 0.68 |
+| Vector only (embed title + paths, kNN, no graph) | 0.48 | 0.82 | 0.88 | 0.65 |
+| **Keystone (graph blend)** | **0.57** | **0.93** | **0.98** | **0.75** |
+
+Keystone beats the strongest classic baseline (file history) on hit@3 by **+5.9 points, 95% bootstrap CI [+3.5, +8.1]**. It wins or ties on every repo; the hardest is `FalkorDB/docs` (hit@3 0.65 vs 0.58 file history), where reviewers rotate the most. The tuned blend ended up using file history (weight 2) and the author-to-reviewer social edges (weight 0.5) with a 90-day half-life-style decay; the module-hierarchy signal got weight 0 on this data, so it is used for the "who knows this module" tool rather than for reviewer prediction.
+
+Other checks (`python -m keystone.qa_eval`):
+
+* **Tool routing:** the agent chose the right tool on 14 of 14 natural-language questions.
+* **Decision retrieval:** for 40 sampled decisions, an LLM wrote a question without reusing the decision's wording; the source PR or issue was in the top 5 for **72.5%** (MRR 0.59).
+* **What did not work** (kept out of the product): adding the PR title to decision embeddings dropped recall@5 to 0.48; fusing decision search with PR-title search (reciprocal rank) left recall flat and lowered MRR (0.42), so decisions use plain embeddings.
+* **Verification cost:** of everything the LLM proposed as a "decision", about three in ten were thrown away because the quote was not in the source or did not support the claim.
 
 ## The agent
 

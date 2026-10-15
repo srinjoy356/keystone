@@ -30,7 +30,7 @@ form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}form inp
 .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}.kpi{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 .kpi b{display:block;font-size:18px}table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
 .bar{height:6px;border-radius:3px;background:var(--acc)}.risk{display:grid;gap:8px}
-.legend{font-size:12px;color:var(--mute);margin-top:6px}.err{color:var(--bad)}
+.a a{color:var(--acc)}.legend{font-size:12px;color:var(--mute);margin-top:6px}.err{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -57,7 +57,7 @@ form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}form inp
     <div class="pane" id="ho"><div class="sub">Two agents coordinate through shared graph state. Triage queues open PRs with a risk note; Router workers claim tasks atomically and propose reviewers; you approve; an executor acts (dry-run unless a write token and allowlisted repo are configured).</div>
   <p><button id="b-tri">1. Triage agent: queue open PRs</button> <button id="b-route">2. Router agent: claim next + propose</button></p><div id="board"></div></div>
     <div class="pane" id="me"><div class="sub">What Keystone remembers about you, stored in your own graph (mem_&lt;you&gt;), isolated from every other user.</div><div id="memo"></div></div>
-    <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:420px"></div><div class="legend">Contributor graph: colour = community (label propagation), size = PageRank, edges = author to reviewer.</div></div>
+    <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:420px"></div><div class="legend">Contributor graph: colour = home repo (where most activity happens), size = PageRank (reviewing authority), edges = author to reviewer or commenter. Betweenness (bridge people) is in the Risk map.</div></div>
     <div class="pane" id="evl"></div>
   </section>
 </main>
@@ -66,6 +66,8 @@ form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}form inp
 const $=s=>document.querySelector(s);let USER=(()=>{try{let u=localStorage.ks_user;if(!u){u='u'+Math.random().toString(36).slice(2,9);localStorage.ks_user=u}return u}catch(e){return 'demo'}})();let tenant='falkordb',cy=null,ovcy=null;
 const COL={Person:'#7c9cff',PR:'#4ade80',Module:'#fbbf24',File:'#94a3b8',Decision:'#f472b6',Issue:'#fb923c'};
 const PAL=['#7c9cff','#4ade80','#fbbf24','#f472b6','#22d3ee','#fb923c','#a78bfa','#f87171','#2dd4bf','#e879f9'];
+const HOMES=[];const hi=h=>{let i=HOMES.indexOf(h);if(i<0){HOMES.push(h);i=HOMES.length-1}return i%PAL.length};
+const link=t=>t.replace(/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)/g,'<a href="https://github.com/$1/pull/$2" target="_blank" rel="noopener">$1#$2</a>');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const j=async(u,o)=>{const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.statusText);return r.json()};
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab,.pane').forEach(x=>x.classList.remove('on'));t.classList.add('on');$('#'+t.dataset.p).classList.add('on');if(t.dataset.p==='ov')loadOverview();if(t.dataset.p==='ho')loadBoard();if(t.dataset.p==='me')loadMemory();if(t.dataset.p==='rk')loadRisk();if(t.dataset.p==='evl')loadEval();if(cy)cy.resize()});
@@ -84,7 +86,7 @@ function drawTrace(tr){$('#trace').innerHTML=tr.map(t=>`<div class="trace"><b>${
 $('#f').onsubmit=async e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;$('#q').value='';
   const m=document.createElement('div');m.className='msg';m.innerHTML=`<div class="q">${esc(q)}</div><div class="a sub">Querying the graph...</div>`;$('#chat').append(m);$('#chat').scrollTop=1e9;
   try{const r=await j('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant,question:q,user:USER})});
-    m.querySelector('.a').className='a';m.querySelector('.a').textContent=r.answer;drawEvidence(r.evidence);drawTrace(r.trace);
+    m.querySelector('.a').className='a';m.querySelector('.a').innerHTML=link(esc(r.answer));drawEvidence(r.evidence);drawTrace(r.trace);
     const sr=r.structured&&r.structured.suggest_reviewers;if(sr&&sr.suggestions)m.append(...sr.suggestions.map(sg=>{const d=document.createElement('div');d.className='sub';d.innerHTML=`${esc(sg.person)}: <button class="chip" data-v="accept">good pick</button> <button class="chip" data-v="reject">skip them</button>`;
       d.querySelectorAll('button').forEach(b=>b.onclick=async()=>{let reason='';if(b.dataset.v==='reject')reason=prompt('Why skip '+sg.person+'? (kept as a learned rule for 30 days)')||'';await post('/api/feedback',{pr:sr.pr,person:sg.person,verdict:b.dataset.v,reason,scope:sr.scope});d.textContent=sg.person+': feedback saved, memory updated'});return d}));}
   catch(err){m.querySelector('.a').innerHTML=`<span class="err">${esc(err.message)}</span>`}
@@ -93,11 +95,13 @@ async function loadOverview(){const o=await j('/api/overview?tenant='+tenant);
   $('#kp').innerHTML=Object.entries(o.stats).map(([k,v])=>`<div class="kpi"><b>${v}</b>${k}s</div>`).join('');
   if(ovcy)ovcy.destroy();
   ovcy=cytoscape({container:$('#ovg'),elements:[...o.nodes.map(n=>({data:{id:n.id,label:n.id,c:n.community,s:10+Math.sqrt(n.pagerank*4000)}})),...o.edges.map((e,i)=>({data:{id:'o'+i,source:e.source,target:e.target}}))],
-   layout:{name:'cose',animate:false,nodeRepulsion:6000},style:[{selector:'node',style:{width:'data(s)',height:'data(s)','background-color':n=>PAL[(n.data('c')||0)%PAL.length],label:'data(label)','font-size':8,color:getComputedStyle(document.body).color}},{selector:'edge',style:{width:.6,'line-color':'#556',opacity:.5}}]})}
+   layout:{name:'cose',animate:false,nodeRepulsion:6000},style:[{selector:'node',style:{width:'data(s)',height:'data(s)','background-color':n=>PAL[hi(n.data('c'))],label:'data(label)','font-size':8,color:getComputedStyle(document.body).color}},{selector:'edge',style:{width:.6,'line-color':'#556',opacity:.5}}]})}
 async function loadRisk(){const r=await j('/api/risk?tenant='+tenant);
   $('#rk').innerHTML=`<h3>Knowledge concentration (modules)</h3><div class="sub">${esc(r.bus_factor.note)}</div><div class="risk">`+r.bus_factor.at_risk_modules.map(m=>`<div class="trace"><b>${esc(m.module)}</b><div class="bar" style="width:${m.share*100}%"></div><span class="sub">top expert ${esc(m.top_expert)} holds ${Math.round(m.share*100)}% of ${m.recent_prs} recent PR touches; ${m.active_backups} active backups; last active ${m.top_expert_last_active_days}d ago</span></div>`).join('')+`</div><h3>Bridge people</h3><table><tr><th>login</th><th>betweenness</th><th>PageRank</th><th>communities reached</th></tr>`+r.bridges.bridge_people.map(b=>`<tr><td>${esc(b.person)}</td><td>${b.bridge_score}</td><td>${b.pagerank}</td><td>${b.communities_reached}</td></tr>`).join('')+'</table>'}
 async function loadEval(){const e=await j('/api/eval');if(!e.test){$('#evl').innerHTML='<div class="sub">No eval yet.</div>';return}
-  $('#evl').innerHTML=`<h3>Predict the real reviewers of ${e.n_test} later PRs (history before each PR only)</h3><table><tr><th>method</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr>`+Object.entries(e.test).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v['hit@1'].toFixed(2)}</td><td>${v['hit@3'].toFixed(2)}</td><td>${v.mrr.toFixed(2)}</td></tr>`).join('')+`</table><div class="legend">Weights tuned on a separate validation slice. Time-split, no leakage. Reported honestly per repo in the README.</div>`}
+  $('#evl').innerHTML=`<h3>Predict the real reviewers of ${e.n_test} later PRs (history before each PR only)</h3><table><tr><th>method</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr>`+Object.entries(e.test).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v['hit@1'].toFixed(2)}</td><td>${v['hit@3'].toFixed(2)}</td><td>${v.mrr.toFixed(2)}</td></tr>`).join('')+`</table><div class="legend">Weights tuned on a separate validation slice. Time-split, no leakage.</div>`
+  +(e.per_repo?`<h3>hit@3 per repo (test slice)</h3><table><tr><th>repo</th><th>n</th><th>Keystone</th><th>file history</th><th>vector only</th></tr>`+Object.entries(e.per_repo).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${v.keystone.toFixed(2)}</td><td>${v.file_history.toFixed(2)}</td><td>${v.vector_only.toFixed(2)}</td></tr>`).join('')+'</table>':'')
+  +(e.qa?`<h3>Agent questions</h3><div class="kpis"><div class="kpi"><b>${Math.round(e.qa.routing.accuracy*100)}%</b>right tool chosen (${e.qa.routing.n} questions)</div><div class="kpi"><b>${Math.round(e.qa.retrieval['recall@5']*100)}%</b>decision source found in top 5 (${e.qa.retrieval.n} unseen questions)</div></div>`:'')}
 const post=(u,b)=>j(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant,user:USER,...b})});
 async function loadMemory(){const m=await j('/api/memory?user='+USER);
   $('#memo').innerHTML=`<h3>Learned rules (procedural)</h3>`+(m.rules.length?m.rules.map(r=>`<div class="trace">Avoid <b>${esc(r.person)}</b> under <code>${esc(r.scope)}</code> <span class="sub">(${esc(r.reason||'no reason given')}; from ${esc(r.pr)}; expires in ${r.expires_in_days}d)</span></div>`).join(''):'<div class="sub">None yet. Ask for reviewers, then press "skip them" on a suggestion.</div>')

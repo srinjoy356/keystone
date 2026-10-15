@@ -200,14 +200,17 @@ def connection(tenant: str, a: str, b: str):
     return _out({"hops": len(types), "path": [f"{n} ({l})" for n, l in zip(names, labels)]}, ev, "CONNECTION")
 
 
-def why_decision(tenant: str, question: str, k: int = 4):
+WHY = """CALL db.idx.vector.queryNodes('Decision','emb',$k,vecf32($v)) YIELD node, score
+MATCH (node)-[:DECIDED_IN]->(pr) OPTIONAL MATCH (p:Person)-[:STATED]->(node)
+RETURN node.id, node.text, node.why, node.quote, node.ts, pr.id, pr.title, pr.url, p.login, labels(pr)[0], score ORDER BY score"""
+
+
+def why_decision(tenant: str, question: str, k: int = 5):
+    """Vector search over verified decisions, then one graph hop to the source thread and the person who said it.
+    (Tried title-augmented embeddings and rank-fusion with PR-title search: both scored lower on MRR, see README.)"""
     g, ev = kb(tenant), _ev()
-    rows = ro(g, """CALL db.idx.vector.queryNodes('Decision','emb',$k,vecf32($v)) YIELD node, score
-                    MATCH (node)-[:DECIDED_IN]->(pr) OPTIONAL MATCH (p:Person)-[:STATED]->(node)
-                    RETURN node.id, node.text, node.why, node.quote, node.ts, pr.id, pr.title, pr.url, p.login, score, labels(pr)[0] ORDER BY score""",
-              {"k": k, "v": embed([question])[0]})
     out = []
-    for did, text, why, quote, ts, pid, ptitle, url, who, score, kind in rows:
+    for did, text, why, quote, ts, pid, ptitle, url, who, kind, score in ro(g, WHY, {"k": k, "v": embed([question])[0]}):
         _n(ev, did, "Decision", text[:60]); _n(ev, pid, kind, pid, title=ptitle)
         ev["edges"].append({"source": did, "target": pid, "type": "DECIDED_IN"})
         if who:

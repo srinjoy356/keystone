@@ -117,7 +117,13 @@ def run(tenant="falkordb", repos=None):
     a, b = np.array(rows["KEYSTONE (graph blend)"]["_h3"], float), np.array(rows["file-history (CODEOWNERS/blame-style)"]["_h3"], float)
     d = [np.mean((a - b)[rng.integers(0, len(a), len(a))]) for _ in range(2000)]
     print(f"hit@3 gain vs file-history: {np.mean(a - b):+.3f}  95% CI [{np.percentile(d, 2.5):+.3f}, {np.percentile(d, 97.5):+.3f}]")
-    out = {"best": {"w": best[0], "tau": best[1]}, "n_val": len(val), "n_test": len(test),
+    per_repo = {}
+    for repo in sorted({c["repo"] for c in test}):
+        sub = [c for c in test if c["repo"] == repo]
+        per_repo[repo] = {"n": len(sub), **{k: round(float(metrics(sub, *v)["hit@3"]), 3) for k, v in
+                          {"keystone": best, "file_history": BASELINES["file-history (CODEOWNERS/blame-style)"], "vector_only": BASELINES["vector-only (embedding kNN, no graph)"]}.items()}}
+    print("per-repo hit@3:", json.dumps(per_repo))
+    out = {"per_repo": per_repo, "best": {"w": best[0], "tau": best[1]}, "n_val": len(val), "n_test": len(test),
            "test": {k: {m: float(v) for m, v in r.items() if not m.startswith("_")} for k, r in rows.items()}}
     (CACHE.parent / "eval_result.json").write_text(json.dumps(out, indent=1))
 

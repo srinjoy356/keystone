@@ -1,0 +1,126 @@
+{
+ "routing": {
+  "accuracy": 1.0,
+  "n": 14,
+  "rows": [
+   {
+    "q": "Who should review FalkorDB/GraphRAG-SDK#328?",
+    "want": "suggest_reviewers",
+    "used": [
+     "suggest_reviewers"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Suggest reviewers for FalkorDB/falkordb-py#150",
+    "want": "suggest_reviewers",
+    "used": [
+     "suggest_reviewers"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Which parts of the codebase would lose the most knowledge if one person left?",
+    "want": "bus_factor",
+    "used": [
+     "bus_factor"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Where do we have a single point of knowledge failure?",
+    "want": "bus_factor",
+    "used": [
+     "bus_factor"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Who understands the query planner best?",
+    "want": "who_knows",
+    "used": [
+     "who_knows"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Who should I ask about vector index problems?",
+    "want": "who_knows",
+    "used": [
+     "who_knows"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Who owns the graph/src/runtime directory?",
+    "want": "who_knows",
+    "used": [
+     "who_knows"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Why did the team decide to run redis-server as a non-root user?",
+    "want": "why_decision",
+    "used": [
+     "why_decision"
+    ],
+    "ok": true
+   },
+   {
+    "q": "What was the reasoning behind deduplicating entities in GraphRAG?",
+    "want": "why_decision",
+    "used": [
+     "why_decision"
+    ],
+    "ok": true
+   },
+   {
+    "q": "How did we end up with the current approach to storing vectors?",
+    "want": "why_decision",
+    "used": [
+     "why_decision"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Which contributors connect the different repositories together?",
+    "want": "bridges",
+    "used": [
+     "bridges"
+    ],
+    "ok": true
+   },
+   {
+    "q": "Who are the key bridge people between teams?",
+    "want": "bridges",
+    "used": [
+     "bridges"
+    ],
+    "ok": true
+   },
+   {
+    "q": "How are gkorland and galshubeli connected?",
+    "want": "connection",
+    "used": [
+     "connection"
+    ],
+    "ok": true
+   },
+   {
+    "q": "What is the shortest link between AviAvni and Naseem77?",
+    "want": "connection",
+    "used": [
+     "connection"
+    ],
+    "ok": true
+   }
+  ]
+ },
+ "retrieval": {
+  "recall@5": 0.725,
+  "mrr": 0.5862499999999999,
+  "n": 40,
+  "median_ms": 565
+ }
+}

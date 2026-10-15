@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from . import coord, mem, tools
 from .agent import ask
+from .config import env
 from .db import db, kb, ro, graph_name
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +25,13 @@ def limited(ip: str) -> bool:
         return True
     q.append(now)
     return False
+
+
+def budget_ok() -> bool:
+    """Global daily cap on LLM calls, kept in FalkorDB so it holds across serverless instances (protects the OpenAI budget)."""
+    n = db().select_graph("ops_meta").query("MERGE (m:Meter {day:$d}) SET m.n = coalesce(m.n, 0) + 1 RETURN m.n",
+                                            {"d": time.strftime("%Y-%m-%d")}).result_set[0][0]
+    return n <= int(env("DAILY_ASK_CAP", "400"))
 
 
 class Ask(BaseModel):
@@ -58,6 +66,8 @@ def tenants():
 def api_ask(body: Ask, request: Request):
     if limited(request.client.host if request.client else "?"):
         raise HTTPException(429, "demo rate limit reached, try again later")
+    if not budget_ok():
+        raise HTTPException(429, "daily demo budget reached, please come back tomorrow")
     if graph_name("kb", body.tenant) not in db().list_graphs():
         raise HTTPException(404, "unknown tenant")
     return ask(body.tenant, body.question, body.user)
@@ -110,7 +120,7 @@ def memory(user: str = Query(pattern=r"^[A-Za-z0-9_-]{1,40}$")):
 def overview(tenant: str = "falkordb"):
     g = kb(tenant)
     stats = {l: ro(g, f"MATCH (n:{l}) RETURN count(n)")[0][0] for l in ("Person", "PR", "File", "Module", "Decision")}
-    people = ro(g, "MATCH (p:Person) WHERE p.pagerank IS NOT NULL RETURN p.login, p.community, p.pagerank, p.acts ORDER BY p.acts DESC LIMIT 120")
+    people = ro(g, "MATCH (p:Person) WHERE p.pagerank IS NOT NULL RETURN p.login, p.home, p.pagerank, p.acts ORDER BY p.acts DESC LIMIT 120")
     keep = {p[0] for p in people}
     links = [r for r in ro(g, "MATCH (a:Person)-[c:COLLAB]->(b:Person) WHERE c.n >= 2 RETURN a.login, b.login, c.n") if r[0] in keep and r[1] in keep]
     return {"stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in people],
@@ -124,8 +134,13 @@ def risk(tenant: str = "falkordb", repo: str | None = None):
 
 @app.get("/api/eval")
 def evaluation():
-    f = ROOT / "data" / "eval_result.json"
-    return json.loads(f.read_text()) if f.exists() else {}
+    out = {}
+    for name, key in (("eval_result.json", None), ("qa_eval.json", "qa")):
+        f = ROOT / "data" / name
+        if f.exists():
+            d = json.loads(f.read_text())
+            out.update(d if key is None else {key: {k: {m: v for m, v in r.items() if m != "rows"} for k, r in d.items()}})
+    return out
 
 
-app.mount("/", StaticFiles(directory=ROOT / "web", html=True), name="web")
+app.mount("/", StaticFiles(directory=ROOT / "public", html=True), name="web")
