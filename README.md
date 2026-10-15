@@ -171,6 +171,8 @@ Claude Code, from the repository (a project-scoped `.mcp.json` is included, or r
 claude mcp add keystone -- python -m keystone.mcp_server
 ```
 
+Google Antigravity: agent panel, `...`, MCP Servers, Manage MCP Servers, View raw config, then paste the same `keystone` block under `mcpServers` (or save it as `.agents/mcp_config.json` in the repository).
+
 FalkorDB must be reachable (`docker compose up`, or set `FALKORDB_TARGET=cloud` and the `FALKORDB_*` variables). Then ask your agent "Who should review FalkorDB/GraphRAG-SDK#328?" and it will choose `suggest_reviewers`.
 
 ## Concurrency

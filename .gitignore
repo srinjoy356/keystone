@@ -22,3 +22,4 @@ private/
 CLAUDE.md
 data/*.err
 data/more_decisions.sh
+.agents/
