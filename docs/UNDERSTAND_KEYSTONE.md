@@ -92,13 +92,13 @@ Knowledge in a software team is concentrated and invisible. Concretely, four que
 | Ask the agent | Type a question, get an answer with an evidence graph and the exact Cypher used | `agent.py`, `tools.py` |
 | Reviewer suggestions | Names plus the earlier PRs that justify each | `suggest_reviewers` in `tools.py` |
 | Who knows X | For a path (`graph/src/runtime`) or a free-text topic ("variable-length traversal") | `who_knows` |
-| Risk map | Tile map of modules coloured by how concentrated knowledge is, plus top risks | `bus_factor`, `risk_map` |
+| Problem section | Tile map of modules coloured by how concentrated knowledge is, plus top risks | `bus_factor`, `risk_map` |
 | Bridge people | People connecting otherwise separate groups | `bridges` (betweenness) |
 | Connection | "How are A and B connected?" as a path | `connection` (shortest path) |
 | Why was it decided | A decision, a verbatim quote, a link to the source thread, and dated related decisions | `why_decision` |
-| Memory | Tell it "Naseem77 is on leave for two weeks"; it skips them and explains | `mem.py`, `remember_unavailable` |
-| Handoff | Triage agent queues open PRs; router workers claim and propose; you approve; an issue is created in a sandbox repo | `coord.py` |
-| Eval tab | The held-out reviewer-prediction results | `evaluate.py` |
+| Remember section | A three-step demo plus a panel of what is stored; or tell it "Naseem77 is on leave for two weeks"; it skips them and explains | `mem.py`, `remember_unavailable` |
+| Act section | Triage agent queues open PRs; router workers claim and propose; you approve; an issue is created in a sandbox repo | `coord.py` |
+| Trust section | The held-out reviewer-prediction results and the decision-verification funnel | `evaluate.py`, `facts.py` |
 | MCP server | The same tools usable from Claude Desktop or Cursor | `mcp_server.py` |
 | Two tenants | FalkorDB's repos and pallets/click + flask, each its own graph | `build_tenant.py` |
 
@@ -315,12 +315,12 @@ Exposes the six read-only tools over the Model Context Protocol (MCP) via stdio.
 # PART 4: Likely judge questions, with answers
 
 1. **Why FalkorDB and not just Postgres plus pgvector?** The core question is multi-hop and weighted over structure (PR to files to directories to earlier PRs to people). In SQL that is recursive joins; in Cypher it is one pattern. We also use graph algorithms (PageRank, betweenness) and per-tenant and per-user graph isolation natively. Remove FalkorDB and every one of those capabilities goes with it.
-2. **Where exactly does the graph do real work?** Reviewer scoring, risk map, topic expertise (vector recall then graph expansion), bridges, shortest path, memory rules, the task queue's atomic claim. Open the "How it was found" tab to see the queries.
+2. **Where exactly does the graph do real work?** Reviewer scoring, risk map, topic expertise (vector recall then graph expansion), bridges, shortest path, memory rules, the task queue's atomic claim. Open "How it was found" in the Ask section to see the queries.
 3. **How do you know it works?** Time-split held-out evaluation on 542 PRs, tuned on separate data, against four baselines, with a bootstrap confidence interval, reported per repo including the weak one.
 4. **Can the LLM hallucinate a decision?** It can propose one, but code keeps it only if the quote is a verbatim substring of the cited message and a second check confirms the quote states the decision. 27% of proposals were rejected.
 5. **Does the model write Cypher? Can it write to the database?** No. It picks from nine fixed tools. All reads run with `GRAPH.RO_QUERY`, parameterised and time-limited, so the server itself rejects writes. The only writes (memory, task queue) are our own code, scoped to the user's or tenant's graph.
 6. **What about prompt injection from PR text?** Tool results are treated as data by the system prompt; the model cannot choose a user identity; the worst a malicious comment can do is influence wording, since every tool is read-only except writing to the caller's own memory.
-7. **How does memory work, and is it really memory?** Four layers: working (last turns), episodic (past questions linked to entities), semantic (accept/reject feedback), procedural (expiring avoid rules). A rule changes the next answer, and you can see it in the Memory tab. Each user has a separate graph.
+7. **How does memory work, and is it really memory?** Four layers: working (last turns), episodic (past questions linked to entities), semantic (accept/reject feedback), procedural (expiring avoid rules). A rule changes the next answer, and you can see it in the Remember section. Each user has a separate graph.
 8. **How do two agents coordinate safely?** Through shared graph state. Claiming a task is one write query and FalkorDB serialises writes; a test races 12 threads for 30 tasks and asserts each is claimed exactly once.
 9. **Is it multi-tenant?** Yes, structurally. Different graphs per tenant and per user. Tests prove no shared nodes and that tools stay inside their tenant.
 10. **What does "acts" mean here?** On human approval it opens a real issue in our sandbox repo with the recommendation and evidence. It deliberately never writes to the projects it analyses.
