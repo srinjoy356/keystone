@@ -42,8 +42,8 @@ OBS settings: Settings > Video: base and output 1920x1080, 30 fps. Settings > Ou
 | 1:25 - 1:50 | Screen: Remember | Memory that changes answers (Track 2) |
 | 1:50 - 2:15 | Screen: Act | Two agents and a real action (Tracks 1 and 2) |
 | 2:15 - 2:40 | Screen: Trust | Proof it works |
-| 2:40 - 2:55 | Screen: How it works | FalkorDB is central |
-| 2:55 - 3:05 | **Face, full frame** | Close and links |
+| 2:40 - 3:00 | Screen: How it works, then the MCP panel (optional live MCP clip) | FalkorDB is central; other agents can use it (Track 1: MCP) |
+| 3:00 - 3:10 | **Face, full frame** | Close and links |
 
 If you are not comfortable doing it in one take, record three pieces (face intro, screen with voice-over, face outro) and join them in Clipchamp.
 
@@ -61,7 +61,7 @@ While it runs: "Watch the steps. The agent chooses one of nine fixed graph tools
 When the answer and trail appear: "Here is why it answered this way. This pull request touched fifty files. The graph walked to earlier pull requests that touched the same files, and to the people on them. A thicker line means a bigger contribution."
 *Explore the graph (about 12 seconds). Click the card for the first person in the trail (for example Naseem77):* "And it is not a picture. Click a person and I get facts straight from FalkorDB." *Click "Expand neighbours" on the card; the view switches to the Graph tab and animates in more nodes. Hover one node so the rest fade:* "Expanding runs a live read-only query and pulls in their top modules and recent pull requests. Hover highlights the connections."
 *Click the Cypher tab:* "And this is the exact Cypher that ran, read-only. That is Track 1: an agent acting on connected data, with its reasoning visible and explorable."
-(Optional, 5 seconds, only if you are under time: "The same tools are available over MCP.")
+(MCP is shown at 2:40, in its own beat.)
 
 **1:25 Remember (scroll to section 03)**
 *Click Ask, then Mark on leave, then Ask again.*
@@ -76,8 +76,10 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
 
 **2:40 How it works (scroll to section 06)**
 "Everything lives in FalkorDB: Cypher traversals, PageRank and betweenness, a vector index for decisions, a named graph per user and per tenant, read-only queries. Take FalkorDB away and nothing runs."
+*Scroll to the "Use it from any agent" panel (about 8 seconds):* "And it is not locked into this page. The same six read-only tools are exposed over MCP, so Claude Desktop, Claude Code or Cursor can list them and pick the right one for a question. Here is the config, and the one-line command for Claude Code."
+*Optional live clip (about 10 seconds, see Part 6b):* cut to a terminal where Claude Code answers "Using the keystone tools, who should review FalkorDB/GraphRAG-SDK#328?" and visibly calls `suggest_reviewers`. "Same tools, same answer, from a different agent."
 
-**2:55 Face**
+**3:00 Face**
 "The live demo, code and README are linked below; it runs with docker compose up. I built it with Claude Code, disclosed in the README, and I can walk you through every query. Thanks for watching."
 
 ## Part 5: Delivery tips
@@ -90,13 +92,30 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
 - If something fails, stop, take a breath, redo that section. Do not apologise on camera; cut it.
 - Do two or three takes. The second is usually best.
 - **Graph exploration tips:** the detail card opens at the top right of the right-hand panel. "Expand neighbours" needs the live backend, so rehearse it once; it takes about a second. Move the mouse slowly onto one node so the fade-out effect is visible on the recording. Zoom with the + and - buttons (plain scroll scrolls the page; ctrl+scroll also zooms).
-- **If you run long, cut in this order:** the MCP sentence, the "Naseem77 is on leave for two weeks" plain-English chip, the click-through to the created issue. Never cut the trail, the graph exploration, the Cypher tab, the memory before-and-after, or the 93% result.
+- **If you run long, cut in this order:** the live MCP clip (keep the MCP panel and its spoken line), the "Naseem77 is on leave for two weeks" plain-English chip, the click-through to the created issue. Never cut the trail, the graph exploration, the Cypher tab, the memory before-and-after, the MCP panel, or the 93% result.
 
 ## Part 6: If the live site is slow or fails during recording
 
 - The page falls back to a cached snapshot for reads and shows a banner; questions need the live backend.
 - Retry once. If it is still slow, record that section later and cut it in.
 - Last resort: run it locally with `docker compose up` (needs your OpenAI key in the shell) and record http://localhost:8000. The page is identical.
+
+## Part 6b: The optional live MCP clip (10 seconds)
+
+The MCP panel on the page is enough to satisfy "MCP tool selection". A live clip is stronger because it shows a different agent choosing the tool. It is optional, rehearse it once, and record it separately so you can cut it in.
+
+One-time setup (before recording):
+
+1. Start FalkorDB with the data: Docker Desktop running, then `docker start keystone-falkor` (the local container with the graphs). Or use Cloud: add `-e FALKORDB_TARGET=cloud` to the command below (the Cloud credentials are read from your `.env`).
+2. In a terminal inside `C:\dev\hackathon_falkor`, register the server with Claude Code:
+   ```
+   claude mcp add keystone -- C:\dev\hackathon_falkor\.venv\Scripts\python.exe -m keystone.mcp_server
+   ```
+3. Start Claude Code in that folder (`claude`) and check `/mcp` shows `keystone` as connected.
+
+On camera: type "Using the keystone tools, who should review FalkorDB/GraphRAG-SDK#328?" and let it run. You should see Claude Code call `keystone - suggest_reviewers` and answer with Naseem77 and gkorland. Make the terminal font large and crop to the terminal window.
+
+What I verified: the server starts over stdio, lists six tools and returns real answers to a real MCP client (`python tests/mcp_client_check.py`). I have not driven it from inside Claude Code, so do the rehearsal. If it does not connect, use the panel only.
 
 ## Part 7: Edit and export
 
@@ -113,7 +132,7 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
   Tracks: 1 Agents That Act on Connected Data, 2 Agent Memory and Coordination, 3 Company Brain.
   Live demo: https://keystone-graph.vercel.app
   Code: https://github.com/srinjoy356/keystone
-  0:00 Intro  0:15 Problem  0:40 Ask and explore  1:25 Remember  1:50 Act  2:15 Trust  2:40 How it works
+  0:00 Intro  0:15 Problem  0:40 Ask and explore  1:25 Remember  1:50 Act  2:15 Trust  2:40 How it works and MCP
   ```
 - Visibility: **Unlisted** (or Public). Open the link in a private window to confirm it plays.
 - Give me the URL. I will add it to `public/config.json` (the page then shows an embedded player and a "Watch the 3-minute demo" button) and to the README. Paste the same URL into the WeMakeDevs submission.
@@ -122,6 +141,7 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
 
 - [ ] Incognito window, full screen, 100% zoom, other tabs closed, notifications off
 - [ ] Sandbox issues page open in another window
+- [ ] (Optional) MCP clip rehearsed: Docker running, `claude mcp add` done, `/mcp` shows keystone
 - [ ] Mic tested, face lit from the front
 - [ ] Script on a second screen
 - [ ] Rehearsed once, under 3:15

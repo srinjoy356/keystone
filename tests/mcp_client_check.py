@@ -1,4 +1,4 @@
-"""Start the MCP server over stdio and call it like a real MCP client would."""
+"""Start the MCP server over stdio and call it like a real MCP client would (tool list, then a real call)."""
 import asyncio, json, sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -11,10 +11,11 @@ async def main():
             await s.initialize()
             tools = await s.list_tools()
             print("tools:", [t.name for t in tools.tools])
+            res = await s.call_tool("suggest_reviewers", {"pr": "FalkorDB/GraphRAG-SDK#328"})
+            d = json.loads(res.content[0].text)["result"]
+            print("suggest_reviewers ->", [(x["person"], x["score"]) for x in d["suggestions"]])
             res = await s.call_tool("who_knows", {"target": "variable-length traversal"})
-            print(res.content[0].text[:300])
-            res = await s.call_tool("bus_factor", {})
-            print(res.content[0].text[:200])
+            print("who_knows ->", [x["person"] for x in json.loads(res.content[0].text)["result"]["experts"]][:3])
 
 
 asyncio.run(main())

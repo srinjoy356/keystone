@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "keystone": {
+      "command": "python",
+      "args": ["-m", "keystone.mcp_server"]
+    }
+  }
+}

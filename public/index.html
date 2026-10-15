@@ -206,8 +206,38 @@ RETURN p.login,
        * exp(-($asof - pr.createdAt) / $tau) ) AS s</pre>
         <p class="small muted" style="margin:10px 0 0">History strictly before the PR, reviews weighted above authorship, exponential recency decay (tau 90 days). The same query, with <code>$asof</code> set to each PR's creation time, is the evaluation.</p></div>
     </div>
-    <div class="grid3" style="margin-top:20px">
-      <div class="panel pad-sm"><p class="h3s">Use it from any agent</p><p class="small muted" style="margin:0">An MCP server exposes the same read-only tools to Claude Desktop, Cursor or any MCP client.</p></div>
+    <div class="panel pad" id="mcp" style="margin-top:20px">
+      <div class="grid2" style="gap:28px">
+        <div>
+          <p class="label acc" style="margin:0 0 8px">Track 01 &middot; MCP tool selection</p>
+          <h3>Use it from any agent</h3>
+          <p class="small muted" style="margin:6px 0 12px">The same read-only graph tools are exposed over the Model Context Protocol, so Claude Desktop, Claude Code, Cursor or any MCP client can list them, pick the right one for a question, and get answers with their evidence. Tested end to end with a real MCP client.</p>
+          <table class="small"><tr><th>Tool</th><th>What the client can ask</th></tr>
+            <tr><td class="mono">who_knows</td><td>Who knows a module, path or topic</td></tr>
+            <tr><td class="mono">suggest_reviewers</td><td>Reviewers for a PR, with the PRs that justify them</td></tr>
+            <tr><td class="mono">bus_factor</td><td>Modules where knowledge is concentrated</td></tr>
+            <tr><td class="mono">bridges</td><td>People who connect groups (betweenness)</td></tr>
+            <tr><td class="mono">connection</td><td>Shortest path between two people</td></tr>
+            <tr><td class="mono">why_decision</td><td>Past decisions with verbatim quotes and sources</td></tr></table>
+        </div>
+        <div>
+          <p class="label" style="margin:0 0 6px">Claude Desktop / Cursor config</p>
+          <pre>{
+  "mcpServers": {
+    "keystone": {
+      "command": "python",
+      "args": ["-m", "keystone.mcp_server"],
+      "env": { "OPENAI_API_KEY": "..." }
+    }
+  }
+}</pre>
+          <p class="label" style="margin:14px 0 6px">Claude Code</p>
+          <pre>claude mcp add keystone -- python -m keystone.mcp_server</pre>
+          <p class="small muted" style="margin:10px 0 0">Run from the repository with FalkorDB reachable (<code>docker compose up</code> or your own instance). Then ask your agent: "Who should review FalkorDB/GraphRAG-SDK#328?"</p>
+        </div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:20px">
       <div class="panel pad-sm"><p class="h3s">Run it anywhere</p><p class="small muted" style="margin:0"><code>docker compose up</code> starts the app with FalkorDB and both graphs preloaded. One command builds a graph from any public repos.</p></div>
       <div class="panel pad-sm"><p class="h3s">Tested, not just demoed</p><p class="small muted" style="margin:0">Unit, isolation and concurrency tests, including 12 threads racing for 30 tasks with each claimed exactly once.</p></div>
     </div>

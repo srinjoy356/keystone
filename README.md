@@ -157,7 +157,21 @@ Other checks (`python -m keystone.qa_eval`):
 
 ## MCP server
 
-`python -m keystone.mcp_server` exposes the read-only graph tools (`who_knows`, `suggest_reviewers`, `bus_factor`, `bridges`, `connection`, `why_decision`) over MCP, so Claude Desktop, Cursor or any MCP client can pick among them. `tests/mcp_client_check.py` starts it over stdio and calls it like a real client.
+`python -m keystone.mcp_server` exposes the read-only graph tools (`who_knows`, `suggest_reviewers`, `bus_factor`, `bridges`, `connection`, `why_decision`) over MCP, so any MCP client can pick among them. `tests/mcp_client_check.py` starts it over stdio and calls it like a real client (lists the tools, then asks for reviewers and experts).
+
+Claude Desktop or Cursor (`mcpServers` config):
+
+```json
+{ "mcpServers": { "keystone": { "command": "python", "args": ["-m", "keystone.mcp_server"], "env": { "OPENAI_API_KEY": "..." } } } }
+```
+
+Claude Code, from the repository (a project-scoped `.mcp.json` is included, or run):
+
+```bash
+claude mcp add keystone -- python -m keystone.mcp_server
+```
+
+FalkorDB must be reachable (`docker compose up`, or set `FALKORDB_TARGET=cloud` and the `FALKORDB_*` variables). Then ask your agent "Who should review FalkorDB/GraphRAG-SDK#328?" and it will choose `suggest_reviewers`.
 
 ## Concurrency
 
