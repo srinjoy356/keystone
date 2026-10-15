@@ -113,7 +113,7 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
   Tracks: 1 Agents That Act on Connected Data, 2 Agent Memory and Coordination, 3 Company Brain.
   Live demo: https://keystone-graph.vercel.app
   Code: https://github.com/srinjoy356/keystone
-  0:00 Intro  0:15 Problem  0:40 Ask  1:20 Remember  1:50 Act  2:15 Trust  2:40 How it works
+  0:00 Intro  0:15 Problem  0:40 Ask and explore  1:25 Remember  1:50 Act  2:15 Trust  2:40 How it works
   ```
 - Visibility: **Unlisted** (or Public). Open the link in a private window to confirm it plays.
 - Give me the URL. I will add it to `public/config.json` (the page then shows an embedded player and a "Watch the 3-minute demo" button) and to the README. Paste the same URL into the WeMakeDevs submission.
