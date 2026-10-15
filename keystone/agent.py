@@ -59,11 +59,13 @@ def call_tool(tenant: str, name: str, args: dict, user: str | None = None):
         return {"data": {"error": f"{type(e).__name__}: {str(e)[:200]}"}, "evidence": {"nodes": [], "edges": []}, "cypher": name}
 
 
-def ask(tenant: str, question: str, user: str | None = None, history: list[dict] | None = None, max_rounds: int = 4) -> dict:
+def ask(tenant: str, question: str, user: str | None = None, history: list[dict] | None = None, max_rounds: int = 4, on_event=None) -> dict:
     client, model = OpenAI(api_key=env("OPENAI_API_KEY")), env("OPENAI_MODEL", "gpt-4o-mini")
     msgs = [{"role": "system", "content": SYSTEM.format(today=time.strftime("%Y-%m-%d"))}, *(history or []), {"role": "user", "content": question}]
     trace, nodes, edges, structured = [], {}, [], {}
-    for _ in range(max_rounds):
+    emit = on_event or (lambda e: None)  # real progress for the UI: which step the agent is actually on
+    for rd in range(max_rounds):
+        emit({"e": "llm", "round": rd})
         r = client.chat.completions.create(model=model, messages=msgs, tools=SPECS, temperature=0)
         m = r.choices[0].message
         if not m.tool_calls:
@@ -74,6 +76,7 @@ def ask(tenant: str, question: str, user: str | None = None, history: list[dict]
         msgs.append(m)
         for c in m.tool_calls:
             args = json.loads(c.function.arguments or "{}")
+            emit({"e": "tool", "name": c.function.name, "args": args})
             log, tok = [], QUERY_LOG.set([])
             t = time.time()
             res = call_tool(tenant, c.function.name, args, user)
@@ -81,6 +84,7 @@ def ask(tenant: str, question: str, user: str | None = None, history: list[dict]
             log = QUERY_LOG.get()
             QUERY_LOG.reset(tok)
             trace.append({"tool": c.function.name, "args": args, "ms": int((time.time() - t) * 1000), "queries": log})
+            emit({"e": "tool_done", "name": c.function.name, "ms": trace[-1]["ms"], "queries": len(log)})
             for n in res["evidence"]["nodes"]:
                 nodes.setdefault(n["id"], n)
             edges += res["evidence"]["edges"]

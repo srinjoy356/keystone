@@ -1,9 +1,9 @@
 """HTTP API + static UI. Public demo: per-IP rate limit protects the OpenAI budget."""
-import json, time
+import json, queue, threading, time
 from collections import defaultdict, deque
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from . import coord, mem, tools
@@ -89,16 +89,44 @@ def tenants():
     return [g[3:] for g in db().list_graphs() if g.startswith("kb_")]
 
 
-@app.post("/api/ask")
-def api_ask(body: Ask, request: Request):
+def ask_checks(body: Ask, request: Request):
     if limited(client_ip(request)):
         raise HTTPException(429, "demo rate limit reached, try again later")
     if not budget_ok():
         raise HTTPException(429, "daily demo budget reached, please come back tomorrow")
-    if graph_name("kb", body.tenant) not in db().list_graphs():
-        raise HTTPException(404, "unknown tenant")
-    turns = [m for t in body.history for m in ({"role": "user", "content": t.q}, {"role": "assistant", "content": t.a})]
-    return ask(body.tenant, body.question, body.user, turns)
+    known_tenant(body.tenant)
+
+
+def turns_of(body: Ask):
+    return [m for t in body.history for m in ({"role": "user", "content": t.q}, {"role": "assistant", "content": t.a})]
+
+
+@app.post("/api/ask")
+def api_ask(body: Ask, request: Request):
+    ask_checks(body, request)
+    return ask(body.tenant, body.question, body.user, turns_of(body))
+
+
+@app.post("/api/ask/stream")
+def api_ask_stream(body: Ask, request: Request):
+    """Same answer as /api/ask, streamed as one JSON event per line so the UI can show the agent's real steps."""
+    ask_checks(body, request)
+    q: queue.Queue = queue.Queue()
+
+    def work():
+        try:
+            q.put({"e": "final", "result": ask(body.tenant, body.question, body.user, turns_of(body), on_event=q.put)})
+        except Exception as ex:  # surface to the client instead of a dropped stream
+            q.put({"e": "error", "message": f"{type(ex).__name__}: {str(ex)[:160]}"})
+        q.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def gen():
+        while (item := q.get()) is not None:
+            yield json.dumps(item, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/feedback")
@@ -179,6 +207,13 @@ def overview(tenant: str = "falkordb"):
     ids = {p[0] for p in nodes}
     return {"stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in nodes],
             "edges": [{"source": a, "target": b, "n": n} for a, b, n in links if a in ids and b in ids]}
+
+
+@app.get("/api/ticker")
+def ticker(tenant: str = "falkordb"):
+    """Latest verified decisions, for the live strip under the hero."""
+    rows = ro(kb(tenant), "MATCH (d:Decision)-[:DECIDED_IN]->(s) RETURN d.text, s.id, d.ts ORDER BY d.ts DESC LIMIT 16")
+    return [{"text": t, "source": sid, "date": time.strftime("%Y-%m-%d", time.gmtime(ts))} for t, sid, ts in rows]
 
 
 @app.get("/api/risk")

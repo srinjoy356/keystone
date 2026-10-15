@@ -36,3 +36,19 @@ def test_daily_budget_stops_llm_calls(monkeypatch):
     api.HITS.clear()
     assert c.post("/api/ask", json={"question": "who knows x"}).status_code == 429
     api.HITS.clear()
+
+
+def test_stream_emits_real_events_then_final(monkeypatch):
+    monkeypatch.setattr(api, "budget_ok", lambda: True)
+    monkeypatch.setattr(api, "known_tenant", lambda t: None)
+    api.HITS.clear()
+
+    def fake(tenant, q, user, turns, on_event=None):
+        on_event({"e": "llm", "round": 0}); on_event({"e": "tool", "name": "who_knows", "args": {}}); on_event({"e": "tool_done", "name": "who_knows", "ms": 3, "queries": 2})
+        return {"answer": "ok", "trace": [], "evidence": {"nodes": [], "edges": []}}
+
+    monkeypatch.setattr(api, "ask", fake)
+    r = c.post("/api/ask/stream", json={"question": "who knows x"})
+    kinds = [__import__("json").loads(line)["e"] for line in r.text.strip().splitlines()]
+    assert r.status_code == 200 and kinds == ["llm", "tool", "tool_done", "final"]
+    api.HITS.clear()

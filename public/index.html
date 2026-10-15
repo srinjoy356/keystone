@@ -5,155 +5,166 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Keystone: know who knows, and why it was decided</title>
 <meta name="description" content="Keystone turns a codebase's real history into a FalkorDB graph and answers who should review, who understands a module, where knowledge is at risk, and why a decision was made, with the evidence behind every answer.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M11 8v16' stroke='white' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M11 16l9-8M11 16l9 8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta property="og:title" content="Keystone: know who knows, and why it was decided">
+<meta property="og:description" content="A FalkorDB knowledge graph of real engineering history, with an agent that shows its evidence.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2314211e'/%3E%3Cpath d='M11 7v18' stroke='%23f1ede3' stroke-width='3.4'/%3E%3Cpath d='M11 16l10-9M11 16l10 9' stroke='%23d34a1f' stroke-width='3' fill='none'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<div id="banner" class="banner" hidden>The live backend is slow right now. Showing a cached snapshot; questions need the live backend.</div>
 
 <nav class="nav" aria-label="Sections">
   <div class="wrap">
-    <a class="brand" href="#top"><i aria-hidden="true"></i>Keystone</a>
+    <a class="brand" href="#top">Keystone <small>on FalkorDB</small></a>
     <div class="links" id="links">
-      <a href="#problem">Problem</a><a href="#ask">Ask</a><a href="#remember">Remember</a><a href="#act">Act</a><a href="#trust">Trust</a><a href="#how">How it works</a>
+      <a href="#problem">01 Problem</a><a href="#ask">02 Ask</a><a href="#remember">03 Remember</a><a href="#act">04 Act</a><a href="#trust">05 Trust</a><a href="#how">06 How it works</a>
     </div>
-    <div class="sp"></div>
-    <label class="small muted" for="tenant">Graph</label>
+    <label class="label" for="tenant" style="margin-left:8px">Graph</label>
     <select id="tenant" aria-label="Choose which tenant graph to explore"></select>
-    <a class="btn sm ghost" href="https://github.com/srinjoy356/keystone" target="_blank" rel="noopener">GitHub</a>
   </div>
 </nav>
 
 <main id="top">
 
-<!-- HERO -->
+<!-- HERO: the product, above the fold -->
 <section class="hero">
   <div class="wrap">
     <div>
-      <p class="kicker">Built on FalkorDB &middot; Graph Hacks 2026</p>
-      <h1>Know who knows.<br>Know why it was decided.</h1>
-      <p class="lead">Keystone turns a codebase's real history into a graph, then answers who should review a change, who understands a module, where knowledge is at risk, and why a decision was made. Every answer shows its evidence.</p>
+      <p class="label" style="margin:0 0 18px">Knowledge graph &middot; Graph Hacks 2026</p>
+      <h1>Know who knows.<br>Know <em class="i">why it was decided.</em></h1>
+      <p class="lead">Every team has modules only one person understands. Keystone turns a codebase's real history into a graph, then answers who should review, who knows what, where knowledge is at risk, and why a decision was made. Every answer shows its evidence.</p>
       <div class="cta">
-        <a class="btn primary" href="#ask">Try it on FalkorDB's own repos</a>
-        <a class="btn" href="#problem">See the problem first</a>
+        <a class="btn dark" href="#problem">See the problem &rarr;</a>
+        <a class="btn" href="#ask">Ask your own question</a>
+        <a class="btn" id="watch" href="#video" hidden>Watch the 3-minute demo</a>
       </div>
-      <div class="stats" id="heroStats" aria-live="polite"></div>
     </div>
-    <div class="card proof" id="proof" aria-label="Example answer"></div>
+    <div class="askcard" aria-label="Ask the graph">
+      <div class="hd"><span class="label acc">Ask the graph</span><span class="label" id="heroNote">FalkorDB's own repositories</span></div>
+      <form id="hf"><input id="hq" placeholder="Who should review FalkorDB/GraphRAG-SDK#328?" maxlength="400" autocomplete="off" aria-label="Your question"><button id="hbtn">Ask</button></form>
+      <div class="chips" id="hchips"></div>
+      <div class="out" id="hout"><div class="skel" style="height:240px"></div></div>
+    </div>
   </div>
 </section>
 
-<!-- 1 PROBLEM -->
-<section id="problem">
+<div class="ticker" aria-label="Latest verified decisions"><div class="track" id="ticker"></div></div>
+<div class="wrap"><div class="stats" id="stats"></div></div>
+
+<!-- FOR JUDGES -->
+<section class="judges">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">1 &middot; The problem</p>
-      <h2>Every team has modules only one person understands.</h2>
-      <p>This is a real codebase: FalkorDB's own repositories. Each tile is a module. Size is how active it has been in the last year; colour is how much of that history one person holds. Warm tiles are the ones where the knowledge walks out the door if that person does.</p>
+    <p class="label acc" style="margin:0">For judges &middot; where each track is satisfied</p>
+    <div class="jgrid">
+      <a href="#ask"><span class="label">Track 01</span><h3>Agents That Act on Connected Data</h3><p>Picks graph tools (multi-hop scoring, PageRank, betweenness, shortest path), shows the exact Cypher, exposes them over MCP, and opens a real issue on approval.</p><span class="go">See it &rarr;</span></a>
+      <a href="#remember"><span class="label">Track 02</span><h3>Agent Memory and Coordination</h3><p>A graph per user holds episodic, semantic and procedural memory. A rule you teach changes the next answer. Two agents share one queue with an atomic claim.</p><span class="go">See it &rarr;</span></a>
+      <a href="#problem"><span class="label">Track 03</span><h3>Company Brain</h3><p>People, modules, PRs, issues and decisions in one graph. Ownership, knowledge risk, and every decision traced to a verified quote.</p><span class="go">See it &rarr;</span></a>
     </div>
+    <div class="jlinks"><a id="lRepo" href="https://github.com/srinjoy356/keystone" target="_blank" rel="noopener">Source and README</a><a href="#trust">Evaluation results</a><a href="#how">Graph model and Cypher</a><a id="lBlog" href="#" hidden target="_blank" rel="noopener">Blog post</a></div>
+  </div>
+</section>
+
+<section class="video" id="video" hidden><div class="wrap"><p class="label acc" style="margin:0 0 12px">Demo video</p><div class="vframe" id="vframe"></div></div></section>
+
+<!-- 01 PROBLEM -->
+<section class="s" id="problem">
+  <div class="wrap">
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">01 &middot; The problem</p>
+      <h2>Every team has modules <em class="i">only one person</em> understands.</h2>
+      <p>This is a real codebase: FalkorDB's own repositories, grouped by repo. Each tile is a module; size is how active it was in the last year, colour is how much of that history one person holds. Warm tiles are where the knowledge leaves if that person does.</p></div>
+      <span class="tracktag">Track 03 &middot; Company Brain</span></div>
     <div class="split">
-      <div class="card pad">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="panel pad">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
           <div class="seg" role="tablist" aria-label="View"><button class="on" data-v="map">Knowledge map</button><button data-v="net">Who works with whom</button></div>
-          <span class="small muted" id="mapHint">Click any tile to ask Keystone about it.</span>
+          <span class="label" id="mapHint">Click a tile to ask Keystone</span>
         </div>
-        <div id="mapView"><div class="map" id="map"></div>
+        <div id="mapView"><div id="map"><div class="skel" style="height:300px"></div></div>
           <div class="legend"><span>One person holds</span><span class="ramp" aria-hidden="true"></span><span>a little &rarr; most of the history</span></div></div>
-        <div id="netView" hidden><div id="netbox"></div><div class="small muted" id="netInfo" style="margin-top:8px">Connected contributors. Colour is home repo, size is reviewing authority (PageRank). Hover for a name; click to open GitHub.</div></div>
+        <div id="netView" hidden><div id="netbox"></div><div class="label" id="netInfo" style="margin-top:10px">Connected contributors. Colour = home repo, size = reviewing authority (PageRank). Hover for a name, click to open GitHub.</div></div>
       </div>
-      <div class="card pad">
+      <div class="panel pad">
         <h3>Where it is most concentrated</h3>
-        <p class="small muted" style="margin:0 0 14px">A statement about modules, not a judgment of any person.</p>
+        <p class="small muted" style="margin:0 0 8px">A statement about modules, not a judgment of any person.</p>
         <div class="risk" id="topRisks"></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 2 ASK -->
-<section id="ask">
+<!-- 02 ASK -->
+<section class="s" id="ask">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">2 &middot; Ask</p>
-      <h2>Ask in plain English. See exactly how it knew.</h2>
-      <p>The agent chooses among nine fixed graph tools. It never writes a query and never sees the database. On the right you get the subgraph the answer rests on, and under "How it was found" the exact Cypher that ran.</p>
-    </div>
-    <div class="card console">
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">02 &middot; Ask</p>
+      <h2>Ask in plain English. <em class="i">See exactly how it knew.</em></h2>
+      <p>The agent chooses among nine fixed graph tools. It never writes a query and never sees the database. On the right: the reasoning trail the answer rests on, the same data as a graph, and the exact Cypher that ran.</p></div>
+      <span class="tracktag">Track 01 &middot; Act on connected data</span></div>
+    <div class="console">
       <div class="chatcol">
-        <div id="chat" aria-live="polite"><div class="msg muted small" id="chatIntro">Pick a starter below or ask your own question. Answers come only from graph queries.</div></div>
+        <div id="chat" aria-live="polite"></div>
         <div class="starters" id="starters"></div>
-        <form class="ask" id="f"><input id="q" placeholder="Ask about owners, reviewers, risk or decisions..." maxlength="400" autocomplete="off" aria-label="Your question"><button class="btn primary" id="askBtn">Ask</button></form>
+        <form class="askf" id="f"><input id="q" placeholder="Ask about owners, reviewers, risk or decisions" maxlength="400" autocomplete="off" aria-label="Your question"><button id="askBtn">Ask</button></form>
       </div>
       <div class="viewcol">
-        <div class="tabs" role="tablist"><button class="on" data-t="ev">Evidence</button><button data-t="tr">How it was found</button></div>
-        <div class="view">
-          <div id="tab-ev"><div class="gbox" id="evbox"></div><div class="nodeinfo" id="nodeinfo">Click a node to see what it is. PRs and people link to GitHub.</div><div class="key" id="key"></div></div>
-          <div id="tab-tr" hidden><div id="trace"></div></div>
-        </div>
+        <div class="vtabs" role="tablist"><button class="on" data-t="trail">Trail</button><button data-t="graph">Graph</button><button data-t="cypher">Cypher</button></div>
+        <div class="vpane" id="pane-trail"></div>
+        <div class="vpane" id="pane-graph" hidden><div class="gbox" id="gbox"></div></div>
+        <div class="vpane" id="pane-cypher" hidden><div id="trace"></div></div>
+        <div class="nodeinfo" id="nodeinfo">Click a node to see what it is. PRs and people link to GitHub.</div>
+        <div class="key" id="key"></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 3 REMEMBER -->
-<section id="remember">
+<!-- 03 REMEMBER -->
+<section class="s" id="remember">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">3 &middot; Remember</p>
-      <h2>It remembers, and remembering changes its answers.</h2>
-      <p>Memory here is not a chat log. Each person gets their own FalkorDB graph holding what they asked (episodic), what they approved or rejected (semantic) and rules they taught it (procedural). Try it: three steps, all real.</p>
-    </div>
-    <div class="split">
-      <div class="card pad" id="memSteps"></div>
-      <div class="card pad mem" id="memPanel"></div>
-    </div>
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">03 &middot; Remember</p>
+      <h2>It remembers, and remembering <em class="i">changes its answers.</em></h2>
+      <p>Memory is not a chat log. Each person gets their own FalkorDB graph holding what they asked (episodic), what they approved or rejected (semantic), and rules they taught it (procedural). Three steps, all real.</p></div>
+      <span class="tracktag">Track 02 &middot; Memory</span></div>
+    <div class="split"><div class="panel pad" id="memSteps"></div><div class="panel pad mem" id="memPanel"></div></div>
   </div>
 </section>
 
-<!-- 4 ACT -->
-<section id="act">
+<!-- 04 ACT -->
+<section class="s" id="act">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">4 &middot; Act</p>
-      <h2>Agents that hand off work, and take real action.</h2>
-      <p>A triage agent queues open pull requests and notes which touch at-risk modules. Router workers claim tasks through one atomic write, so two workers can never take the same one. When you approve, an executor opens a real issue in our sandbox repository. It never writes to the project being analysed.</p>
-    </div>
-    <div class="split">
-      <div class="card pad" id="actSteps"></div>
-      <div class="card pad"><h3>The shared queue</h3><p class="small muted" style="margin:0 0 10px">Tasks live as nodes in a FalkorDB graph that every agent reads and writes.</p><div id="board"></div></div>
-    </div>
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">04 &middot; Act</p>
+      <h2>Agents that hand off work, <em class="i">and take real action.</em></h2>
+      <p>A triage agent queues open pull requests and flags those touching at-risk modules. Router workers claim tasks through one atomic write, so two workers can never take the same one. On your approval an executor opens a real issue in our sandbox repository; it never writes to the project being analysed.</p></div>
+      <span class="tracktag">Tracks 01 + 02 &middot; Action and coordination</span></div>
+    <div class="split"><div class="panel pad" id="actSteps"></div>
+      <div class="panel pad"><h3>The shared queue</h3><p class="small muted" style="margin:0 0 10px">Tasks are nodes in a FalkorDB graph that every agent reads and writes.</p><div id="board"></div></div></div>
   </div>
 </section>
 
-<!-- 5 TRUST -->
-<section id="trust">
+<!-- 05 TRUST -->
+<section class="s" id="trust">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">5 &middot; Trust</p>
-      <h2>Does it actually work? We measured it.</h2>
-      <p>We hid the real reviewers of later pull requests and asked each method to predict them using only the history before each PR was opened. Weights were tuned on separate data; the test slice was never touched.</p>
-    </div>
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">05 &middot; Trust</p>
+      <h2>Does it actually work? <em class="i">We measured it.</em></h2>
+      <p>We hid the real reviewers of later pull requests and asked each method to predict them using only the history before each PR was opened. Weights were tuned on separate data; the test slice was never touched.</p></div>
+      <span class="tracktag">All tracks &middot; Evidence</span></div>
     <div class="grid2">
-      <div class="card pad">
+      <div class="panel pad">
         <div class="big"><b id="bigNum">93%</b><span class="muted">of the time a real reviewer is in Keystone's top three</span></div>
-        <p class="small muted" id="evalNote" style="margin:6px 0 14px"></p>
+        <p class="small muted" id="evalNote" style="margin:8px 0 14px"></p>
         <div class="bars" id="bars"></div>
       </div>
-      <div class="card pad">
+      <div class="panel pad">
         <h3>The model is never trusted on its own</h3>
         <p class="small muted" style="margin:0 0 6px">An LLM proposes decisions with a quote. Code keeps one only if the quote is a verbatim substring of the source message and a second check confirms it states the decision.</p>
-        <div class="funnel" id="funnel"></div>
-        <div class="small muted" id="funnelNote"></div>
-        <div class="grid2" style="margin-top:18px;gap:12px">
-          <div class="kpi"><b id="kRoute">14/14</b><span>questions routed to the right tool</span></div>
-          <div class="kpi"><b id="kRet">70%</b><span>decision source found in top 5 for unseen questions</span></div>
-        </div>
+        <div class="funnel" id="funnel"></div><div class="small muted" id="funnelNote"></div>
+        <div class="grid2" style="margin-top:20px;gap:14px"><div class="kpi"><b id="kRoute">14/14</b><span>questions routed to the right tool</span></div><div class="kpi"><b id="kRet">70%</b><span>decision source found in top 5 for unseen questions</span></div></div>
       </div>
     </div>
     <div class="grid2" style="margin-top:20px">
-      <div class="card pad"><details><summary><b>Per-repository results</b> <span class="small muted">(hit@3 on the test slice)</span></summary><div id="perRepo" style="margin-top:12px"></div></details></div>
-      <div class="card pad"><h3>What we do not claim</h3><ul class="nots small muted" style="margin:6px 0 0;padding-left:18px">
+      <div class="panel pad"><details><summary><b>Per-repository results</b> <span class="small muted">(hit@3 on the test slice)</span></summary><div id="perRepo" style="margin-top:12px"></div></details></div>
+      <div class="panel pad"><h3>What we do not claim</h3><ul class="nots small muted" style="margin:6px 0 0;padding-left:18px">
         <li>It predicts who <i>did</i> review, a proxy for who <i>should</i>.</li>
         <li>Risk is per module, never a judgment of a person; only public handles are used.</li>
         <li>The docs repository is the weak case (0.65): its main reviewer changed over time.</li>
@@ -162,58 +173,51 @@
   </div>
 </section>
 
-<!-- 6 HOW -->
-<section id="how">
+<!-- 06 HOW -->
+<section class="s" id="how">
   <div class="wrap">
-    <div class="sechead">
-      <p class="kicker">6 &middot; How it works</p>
-      <h2>A graph, nine fixed tools, and an agent that cannot touch the database.</h2>
-      <p>Everything the product knows lives in FalkorDB. Take FalkorDB away and there is nothing left to run.</p>
-    </div>
-    <div class="flow" id="flow">
-      <div class="st"><b>1 Fetch</b><span>Public PRs, reviews and issues from GitHub</span><em>github.py</em></div>
-      <div class="st"><b>2 Load</b><span>Idempotent MERGE into a graph per tenant</span><em>load.py</em></div>
-      <div class="st"><b>3 Derive</b><span>PageRank, betweenness, label propagation</span><em>derive.py</em></div>
-      <div class="st"><b>4 Verify</b><span>LLM proposes decisions, code checks the quote</span><em>decisions.py</em></div>
-      <div class="st"><b>5 Query</b><span>Nine fixed read-only tools, parameterised Cypher</span><em>tools.py</em></div>
-      <div class="st"><b>6 Agent</b><span>Picks tools, explains results, shows evidence</span><em>agent.py</em></div>
+    <div class="shead"><div class="copy"><p class="label acc" style="margin:0 0 12px">06 &middot; How it works</p>
+      <h2>A graph, nine fixed tools, and an agent <em class="i">that cannot touch the database.</em></h2>
+      <p>Everything the product knows lives in FalkorDB. Take FalkorDB away and there is nothing left to run.</p></div>
+      <span class="tracktag">All tracks &middot; Architecture</span></div>
+    <div class="flow">
+      <div class="st"><span class="n">01</span><b>Fetch</b><span>Public PRs, reviews and issues from GitHub</span><em>github.py</em></div>
+      <div class="st"><span class="n">02</span><b>Load</b><span>Idempotent MERGE into a graph per tenant</span><em>load.py</em></div>
+      <div class="st"><span class="n">03</span><b>Derive</b><span>PageRank, betweenness, label propagation</span><em>derive.py</em></div>
+      <div class="st"><span class="n">04</span><b>Verify</b><span>LLM proposes decisions, code checks the quote</span><em>decisions.py</em></div>
+      <div class="st"><span class="n">05</span><b>Query</b><span>Nine fixed read-only tools, parameterised Cypher</span><em>tools.py</em></div>
+      <div class="st"><span class="n">06</span><b>Agent</b><span>Picks tools, explains results, shows evidence</span><em>agent.py</em></div>
     </div>
     <div class="grid2" style="margin-top:20px">
-      <div class="card pad">
-        <h3>The graph model</h3>
-        <div class="model" style="margin:8px 0 12px"><span class="pill"><i style="background:#6366f1"></i>Person</span><span class="pill"><i style="background:#10b981"></i>PR</span><span class="pill"><i style="background:#f59e0b"></i>Issue</span><span class="pill"><i style="background:#eab308"></i>Module</span><span class="pill"><i style="background:#94a3b8"></i>File</span><span class="pill"><i style="background:#ec4899"></i>Decision</span></div>
+      <div class="panel pad"><h3>The graph model</h3>
+        <div class="model" style="margin:10px 0 12px"><span class="pill"><i style="background:#1f5c57"></i>Person</span><span class="pill"><i style="background:#c8501e"></i>PR</span><span class="pill"><i style="background:#c98a2b"></i>Issue</span><span class="pill"><i style="background:#8a6d3b"></i>Module</span><span class="pill"><i style="background:#8c948f"></i>File</span><span class="pill"><i style="background:#a63d6a"></i>Decision</span></div>
         <pre>(Person)-[:AUTHORED|REVIEWED]->(PR)-[:TOUCHES]->(File)-[:IN]->(Module)-[:PARENT]->(Module)
 (Decision)-[:DECIDED_IN]->(PR|Issue)      (Person)-[:STATED]->(Decision)
 (Person)-[:COLLAB|LINKS|KNOWS]-> derived for algorithms and paths
 one graph per tenant (kb_x), per user (mem_x), per task queue (ops_x)</pre>
-        <p class="small muted" style="margin:10px 0 0">FalkorDB features used: openCypher, variable-length traversal, PageRank, betweenness, label propagation, shortest path, HNSW vector index, named graphs, RO_QUERY.</p>
-      </div>
-      <div class="card pad">
-        <h3>The query behind "who should review this?"</h3>
+        <p class="small muted" style="margin:10px 0 0">FalkorDB features used: openCypher, variable-length traversal, PageRank, betweenness, label propagation, shortest path, HNSW vector index, named graphs, RO_QUERY.</p></div>
+      <div class="panel pad"><h3>The query behind "who should review this?"</h3>
         <pre>MATCH (f:File) WHERE f.id IN $files
 MATCH (p:Person)-[r:AUTHORED|REVIEWED]->(pr:PR)-[:TOUCHES]->(f)
 WHERE pr.createdAt &lt; $asof AND p.login &lt;&gt; $author
 RETURN p.login,
   sum( (CASE type(r) WHEN 'REVIEWED' THEN 1.0 ELSE 0.5 END)
        * exp(-($asof - pr.createdAt) / $tau) ) AS s</pre>
-        <p class="small muted" style="margin:10px 0 0">History strictly before the PR, reviews weighted above authorship, exponential recency decay (tau 90 days). The same query, with <code>$asof</code> set to each PR's creation time, is the evaluation.</p>
-      </div>
+        <p class="small muted" style="margin:10px 0 0">History strictly before the PR, reviews weighted above authorship, exponential recency decay (tau 90 days). The same query, with <code>$asof</code> set to each PR's creation time, is the evaluation.</p></div>
     </div>
     <div class="grid3" style="margin-top:20px">
-      <div class="card pad-sm"><h3>Use it from any agent</h3><p class="small muted" style="margin:0">An MCP server exposes the same read-only tools to Claude Desktop, Cursor or any MCP client.</p></div>
-      <div class="card pad-sm"><h3>Run it anywhere</h3><p class="small muted" style="margin:0"><code>docker compose up</code> starts the app with FalkorDB and both graphs preloaded. One command builds a graph from any public repos.</p></div>
-      <div class="card pad-sm"><h3>Tested, not just demoed</h3><p class="small muted" style="margin:0">Unit, isolation and concurrency tests, including 12 threads racing for 30 tasks with each claimed exactly once.</p></div>
+      <div class="panel pad-sm"><p class="h3s">Use it from any agent</p><p class="small muted" style="margin:0">An MCP server exposes the same read-only tools to Claude Desktop, Cursor or any MCP client.</p></div>
+      <div class="panel pad-sm"><p class="h3s">Run it anywhere</p><p class="small muted" style="margin:0"><code>docker compose up</code> starts the app with FalkorDB and both graphs preloaded. One command builds a graph from any public repos.</p></div>
+      <div class="panel pad-sm"><p class="h3s">Tested, not just demoed</p><p class="small muted" style="margin:0">Unit, isolation and concurrency tests, including 12 threads racing for 30 tasks with each claimed exactly once.</p></div>
     </div>
   </div>
 </section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <div>Keystone &middot; built for Graph Hacks: Context for AI Agents (WeMakeDevs x FalkorDB). Tracks 1, 2 and 3.</div>
-    <div>Built with Claude Code as the coding assistant, disclosed in the README. Public GitHub data only. <a href="https://github.com/srinjoy356/keystone" target="_blank" rel="noopener">Source and README</a></div>
-  </div>
-</footer>
+<footer><div class="wrap">
+  <div>Keystone &middot; built for Graph Hacks: Context for AI Agents (WeMakeDevs x FalkorDB). Tracks 1, 2 and 3.</div>
+  <div>Built with Claude Code as the coding assistant, disclosed in the README. Public GitHub data only. <a href="https://github.com/srinjoy356/keystone" target="_blank" rel="noopener">Source and README</a></div>
+</div></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <script src="/app.js"></script>
