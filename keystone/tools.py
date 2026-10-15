@@ -1,6 +1,7 @@
 """Agent tools. Each is fixed, parameterised, read-only Cypher over the tenant graph and returns
 {data, evidence:{nodes,edges}, cypher}. The LLM never writes Cypher and never touches the database."""
 import json, math, time
+from functools import lru_cache
 from pathlib import Path
 from .db import kb, ro
 from .load_decisions import embed
@@ -107,11 +108,11 @@ def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
     files = [r[0] for r in ro(g, "MATCH (:PR {id:$id})-[:TOUCHES]->(f:File) RETURN f.id", {"id": pid})]
     asof = int(time.time()) if state == "OPEN" else created
     w, tau = blend_cfg()
-    sig = signals(g, files, author, asof, tau)
-    sig["repo"] = repo_signal(g, pid.split("#")[0], author, asof, tau)
+    sig = signals(g, files, author, asof, tau, need=[k for k, v in w.items() if v > 0 and k != "repo"])  # skip zero-weight signals
+    sig["repo"] = repo_signal(g, pid.split("#")[0], author, asof, tau) if w.get("repo", 0) > 0 else {}
     tot: dict[str, float] = {}
     for name, wt in w.items():
-        d = sig[name]
+        d = sig.get(name, {})
         mx = max(d.values(), default=0) or 1
         for u, v in d.items():
             tot[u] = tot.get(u, 0) + wt * v / mx
@@ -135,7 +136,7 @@ def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
             _n(ev, wid, "PR", wid, title=wt_)
             ev["edges"].append({"source": u, "target": wid, "type": role})
         out.append({"person": u, "score": round(tot[u], 2),
-                    "signals": {k: round(sig[k].get(u, 0) / (max(sig[k].values(), default=0) or 1), 2) for k in w},
+                    "signals": {k: round(sig[k].get(u, 0) / (max(sig[k].values(), default=0) or 1), 2) for k in w if sig.get(k)},
                     "because": [{"pr": a, "title": b, "role": c, "shared_files": d} for a, b, c, d in why]})
     return _out({"pr": pid, "title": title, "author": author, "asof_days_ago": (int(time.time()) - asof) // DAY,
                  "files": len(files), "suggestions": out, "memory_notes": notes,
@@ -143,6 +144,11 @@ def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
 
 
 def bus_factor(tenant: str, repo: str | None = None, limit: int = 6):
+    return _bus_factor(tenant, repo, limit, int(time.time() // 300))  # 5-minute cache: history changes slowly, the scan is the heaviest read
+
+
+@lru_cache(maxsize=64)
+def _bus_factor(tenant: str, repo: str | None, limit: int, _bucket: int):
     g, ev, now = kb(tenant), _ev(), int(time.time())
     rows = ro(g, """MATCH (m:Module)<-[:IN]-(:File)<-[:TOUCHES]-(pr:PR)<-[:AUTHORED|REVIEWED]-(p:Person)
                     WHERE pr.createdAt > $since AND ($repo IS NULL OR m.repo = $repo)
@@ -212,6 +218,15 @@ MATCH (node)-[:DECIDED_IN]->(pr) OPTIONAL MATCH (p:Person)-[:STATED]->(node)
 RETURN node.id, node.text, node.why, node.quote, node.ts, pr.id, pr.title, pr.url, p.login, labels(pr)[0], score ORDER BY score"""
 
 
+# Dated neighbours: other decisions that touched the same module and are semantically close (graph constraint + vector distance).
+RELATED = """MATCH (d:Decision {id:$id})-[:DECIDED_IN]->(:PR)-[:TOUCHES]->(:File)-[:IN]->(m:Module) WHERE m.path <> '/'
+WITH d, collect(DISTINCT m.id) AS ms
+CALL db.idx.vector.queryNodes('Decision','emb',10,d.emb) YIELD node, score
+WITH d, ms, node, score WHERE node.id <> d.id AND score < 0.5
+MATCH (node)-[:DECIDED_IN]->(s:PR)-[:TOUCHES]->(:File)-[:IN]->(m2:Module) WHERE m2.id IN ms
+RETURN DISTINCT node.id, node.text, node.ts, s.id, score ORDER BY node.ts"""
+
+
 def why_decision(tenant: str, question: str, k: int = 5):
     """Vector search over verified decisions, then one graph hop to the source thread and the person who said it.
     (Tried title-augmented embeddings and rank-fusion with PR-title search: both scored lower on MRR, see README.)"""
@@ -222,9 +237,12 @@ def why_decision(tenant: str, question: str, k: int = 5):
         ev["edges"].append({"source": did, "target": pid, "type": "DECIDED_IN"})
         if who:
             _n(ev, who, "Person", who); ev["edges"].append({"source": who, "target": did, "type": "STATED"})
+        rel = ro(g, RELATED, {"id": did}) if len(out) < 3 else []  # timeline context for the top results only
+        fmt = lambda r: {"date": time.strftime("%Y-%m-%d", time.gmtime(r[2])), "decision": r[1], "source": r[3]}
         out.append({"decision": text, "rationale": why, "verbatim_quote": quote, "stated_by": who, "pr": pid, "pr_title": ptitle,
-                    "source_kind": kind, "url": url, "date": time.strftime("%Y-%m-%d", time.gmtime(ts)), "distance": round(score, 2)})
-    return _out({"decisions": out}, ev, "WHY_DECISION")
+                    "source_kind": kind, "url": url, "date": time.strftime("%Y-%m-%d", time.gmtime(ts)), "distance": round(score, 2),
+                    "earlier_related": [fmt(r) for r in rel if r[2] < ts][-2:], "later_related": [fmt(r) for r in rel if r[2] > ts][:2]})
+    return _out({"decisions": out, "note": "related = same module and semantically close; chronology only, not a claim that one replaced another"}, ev, "WHY_DECISION")
 
 
 def recall_memory(tenant: str, topic: str, user: str | None = None):
@@ -232,5 +250,24 @@ def recall_memory(tenant: str, topic: str, user: str | None = None):
     return _out(mem.recall(user, topic) if user else {"note": "no user memory in this session"}, ev, "RECALL_MEMORY")
 
 
-TOOLS = {"recall_memory": recall_memory, "who_knows": who_knows, "suggest_reviewers": suggest_reviewers, "bus_factor": bus_factor, "bridges": bridges,
+def remember_unavailable(tenant: str, person: str, days: int, reason: str = "", user: str | None = None):
+    """Write to THIS USER's memory graph only: skip `person` in this user's reviewer suggestions for `days` days."""
+    ev = _ev()
+    if not user:
+        return _out({"error": "no user session, nothing remembered"}, ev, "REMEMBER")
+    if not ro(kb(tenant), "MATCH (p:Person {login:$p}) RETURN p.login", {"p": person}):
+        return _out({"error": f"'{person}' is not a known contributor in this graph, nothing remembered"}, ev, "REMEMBER")
+    days = max(1, min(int(days), 180))
+    mem.add_rule(user, person, "*", days, reason)
+    _n(ev, person, "Person", person)
+    return _out({"remembered": f"will skip {person} in your reviewer suggestions for {days} days", "reason": reason}, ev, "REMEMBER")
+
+
+def forget_unavailable(tenant: str, person: str, user: str | None = None):
+    ev = _ev()
+    n = mem.drop_rules(user, person) if user else 0
+    return _out({"forgot_rules": n, "person": person}, ev, "FORGET")
+
+
+TOOLS = {"remember_unavailable": remember_unavailable, "forget_unavailable": forget_unavailable, "recall_memory": recall_memory, "who_knows": who_knows, "suggest_reviewers": suggest_reviewers, "bus_factor": bus_factor, "bridges": bridges,
          "connection": connection, "why_decision": why_decision}

@@ -75,3 +75,17 @@ def summary(user: str):
     eps = ro(g, "MATCH (e:Episode) RETURN e.q, e.ts, e.tools ORDER BY e.ts DESC LIMIT 8")
     return {"rules": [{"person": a, "scope": b, "reason": c, "pr": d, "expires_in_days": max(0, (e - now) // DAY)} for a, b, c, d, e in rules],
             "feedback": dict(fb), "episodes": [{"q": q, "days_ago": (now - t) // DAY, "tools": tl} for q, t, tl in eps]}
+
+
+def add_rule(user: str, person: str, scope: str, days: int, reason: str):
+    """Explicit 'avoid for N days' rule stated in conversation (procedural memory), scoped to a module prefix or '*'."""
+    mg(user).query("""MERGE (u:User {id:$u}) MERGE (p:Person {login:$p})
+                      MERGE (u)-[a:AVOID {scope:$s}]->(p) SET a.until=$until, a.reason=$r, a.pr='stated in chat'""",
+                   {"u": user, "p": person, "s": scope, "until": int(time.time()) + days * DAY, "r": reason[:200]})
+
+
+def drop_rules(user: str, person: str) -> int:
+    g = mg(user)
+    n = ro(g, "MATCH (:User {id:$u})-[a:AVOID]->(:Person {login:$p}) RETURN count(a)", {"u": user, "p": person})[0][0]
+    g.query("MATCH (:User {id:$u})-[a:AVOID]->(:Person {login:$p}) DELETE a", {"u": user, "p": person})
+    return n

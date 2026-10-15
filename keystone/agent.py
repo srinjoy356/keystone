@@ -6,20 +6,27 @@ from .db import QUERY_LOG
 from . import mem
 from .tools import TOOLS
 
-SYSTEM = """You are Keystone, an engineering knowledge-risk agent over a graph built from public GitHub history.
+SYSTEM = """Today is {today}. You are Keystone, an engineering knowledge-risk agent over a graph built from public GitHub history.
 Rules:
 - Answer ONLY from tool results. Never invent people, PRs, dates or quotes. If a tool returns nothing or an error, say you do not know.
 - Cite sources inline as [repo#number] for PRs. Quote decisions verbatim, in quotation marks, only from verbatim_quote fields.
 - Knowledge risk is about modules, never a judgment of individuals. Never criticise or rank people negatively; only report evidence-supported facts.
+- Do not label people's expertise with adjectives (strong, weak, moderate); report scores and evidence only.
+- When why_decision returns later_related decisions, mention them as later related decisions the reader should check (they are chronology, not proof that anything was replaced).
 - Plain text only, no markdown. Be concise: 3-6 sentences or a short list. Mention how you know (which signals) in one line.
 Tools: who_knows (module/file expertise), suggest_reviewers (for a PR), bus_factor (modules with concentrated knowledge),
 bridges (people connecting groups), connection (path between two people), why_decision (why something was decided, with sources),
 recall_memory (this user's earlier questions and feedback; use when they refer to earlier conversation or to people they rejected/accepted).
-If suggest_reviewers returns memory_notes, tell the user which rule changed the result."""
+If suggest_reviewers returns memory_notes, tell the user which rule changed the result.
+remember_unavailable / forget_unavailable change THIS user's memory only: call remember_unavailable when the user says someone is out, on leave, busy or should be skipped (convert dates to a number of days from today); call forget_unavailable when they say the person is back. Confirm what you stored."""
 
 SPECS = [
  {"name": "recall_memory", "description": "Recall this user's earlier questions and accept/reject feedback about a topic, person, module or PR.",
   "parameters": {"type": "object", "properties": {"topic": {"type": "string"}}, "required": ["topic"]}},
+ {"name": "remember_unavailable", "description": "Remember that a contributor is unavailable (leave, busy) so they are skipped in this user's reviewer suggestions for N days.",
+  "parameters": {"type": "object", "properties": {"person": {"type": "string", "description": "GitHub login"}, "days": {"type": "integer"}, "reason": {"type": "string"}}, "required": ["person", "days"]}},
+ {"name": "forget_unavailable", "description": "Remove the unavailable-rule for a contributor (they are back).",
+  "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
  {"name": "who_knows", "description": "Who has the deepest recent knowledge of a module, directory, file path fragment, OR a free-text topic (e.g. 'variable-length traversal', 'docker packaging').",
   "parameters": {"type": "object", "properties": {"target": {"type": "string"}}, "required": ["target"]}},
  {"name": "suggest_reviewers", "description": "Suggest reviewers for a PR identified like 'FalkorDB/GraphRAG-SDK#328' (or just '328').",
@@ -52,7 +59,7 @@ def call_tool(tenant: str, name: str, args: dict, user: str | None = None):
 
 def ask(tenant: str, question: str, user: str | None = None, history: list[dict] | None = None, max_rounds: int = 4) -> dict:
     client, model = OpenAI(api_key=env("OPENAI_API_KEY")), env("OPENAI_MODEL", "gpt-4o-mini")
-    msgs = [{"role": "system", "content": SYSTEM}, *(history or []), {"role": "user", "content": question}]
+    msgs = [{"role": "system", "content": SYSTEM.format(today=time.strftime("%Y-%m-%d"))}, *(history or []), {"role": "user", "content": question}]
     trace, nodes, edges, structured = [], {}, [], {}
     for _ in range(max_rounds):
         r = client.chat.completions.create(model=model, messages=msgs, tools=SPECS, temperature=0)

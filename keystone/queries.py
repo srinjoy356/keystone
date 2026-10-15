@@ -32,12 +32,16 @@ MODS_OF_FILES = "MATCH (f:File)-[:IN]->(m:Module) WHERE f.id IN $files RETURN DI
 DAY = 86400
 
 
-def signals(g, files: list[str], author: str, asof: int, tau_days: float = 180, wr: float = 1.0, wa: float = 0.5):
+def signals(g, files: list[str], author: str, asof: int, tau_days: float = 180, wr: float = 1.0, wa: float = 0.5, need=("file", "module", "social")):
     p = {"files": files, "author": author, "asof": asof, "tau": tau_days * DAY, "wr": wr, "wa": wa}
-    mods = [r[0] for r in ro(g, MODS_OF_FILES, p)]
-    return {"file": dict(ro(g, FILE_SIGNAL, p)),
-            "module": dict(ro(g, MODULE_SIGNAL, {**p, "mods": mods})),
-            "social": dict(ro(g, SOCIAL_SIGNAL, p))}
+    out = {}
+    if "file" in need:
+        out["file"] = dict(ro(g, FILE_SIGNAL, p))
+    if "module" in need:
+        out["module"] = dict(ro(g, MODULE_SIGNAL, {**p, "mods": [r[0] for r in ro(g, MODS_OF_FILES, p)]}))
+    if "social" in need:
+        out["social"] = dict(ro(g, SOCIAL_SIGNAL, p))
+    return out
 
 # S4: repo-level prior. Who has been reviewing in this repo lately.
 REPO_SIGNAL = """
