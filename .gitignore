@@ -16,3 +16,9 @@ data/eval_emb.json
 
 .vercel
 data/shots/
+
+# personal notes and local-only files, never shipped
+private/
+CLAUDE.md
+data/*.err
+data/more_decisions.sh
