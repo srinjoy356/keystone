@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from . import tools
+from . import coord, mem, tools
 from .agent import ask
 from .db import db, kb, ro, graph_name
 
@@ -29,6 +29,24 @@ def limited(ip: str) -> bool:
 class Ask(BaseModel):
     tenant: str = "falkordb"
     question: str = Field(min_length=3, max_length=400)
+    user: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,40}$")
+
+
+class Coord(BaseModel):
+    tenant: str = "falkordb"
+    worker: str = Field(default="router-1", pattern=r"^[A-Za-z0-9_-]{1,30}$")
+    task: str = Field(default="", max_length=120)
+    approve: bool = False
+    user: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,40}$")
+
+
+class Feedback(BaseModel):
+    user: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    pr: str = Field(max_length=120)
+    person: str = Field(max_length=60)
+    verdict: str
+    reason: str = Field(default="", max_length=200)
+    scope: str = Field(default="*", max_length=160)
 
 
 @app.get("/api/tenants")
@@ -40,8 +58,47 @@ def tenants():
 def api_ask(body: Ask, request: Request):
     if limited(request.client.host if request.client else "?"):
         raise HTTPException(429, "demo rate limit reached, try again later")
-    graph_name("kb", body.tenant)  # validates tenant id
-    return ask(body.tenant, body.question)
+    if graph_name("kb", body.tenant) not in db().list_graphs():
+        raise HTTPException(404, "unknown tenant")
+    return ask(body.tenant, body.question, body.user)
+
+
+@app.post("/api/feedback")
+def feedback(body: Feedback):
+    try:
+        mem.give_feedback(body.user, body.pr, body.person, body.verdict, body.reason, body.scope)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+def guard(request: Request):
+    if limited(request.client.host if request.client else "?"):
+        raise HTTPException(429, "demo rate limit reached, try again later")
+
+
+@app.post("/api/coord/triage")
+def c_triage(b: Coord, request: Request):
+    guard(request)
+    return {"queued": coord.triage(b.tenant)}
+
+
+@app.post("/api/coord/route")
+def c_route(b: Coord, request: Request):
+    guard(request)
+    tid = coord.claim(b.tenant, b.worker)
+    return {"task": tid, "proposal": coord.propose(b.tenant, tid, b.worker, b.user) if tid else None}
+
+
+@app.post("/api/coord/decide")
+def c_decide(b: Coord, request: Request):
+    guard(request)
+    return coord.decide(b.tenant, b.task, b.approve, b.user)
+
+
+@app.get("/api/coord/board")
+def c_board(tenant: str = "falkordb"):
+    return coord.board(tenant)
 
 
 @app.get("/api/overview")

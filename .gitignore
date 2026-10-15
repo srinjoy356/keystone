@@ -8,3 +8,7 @@ __pycache__/
 data/raw/
 .venv/
 .pytest_cache/
+data/*.log
+data/eval_signals.json
+data/decisions/
+data/raw_issues/

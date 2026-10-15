@@ -21,10 +21,22 @@ query($owner:String!,$name:String!,$after:String){
  }}}}"""
 
 
-def _post(client, variables):
+ISSUE_QUERY = """
+query($owner:String!,$name:String!,$after:String){
+ rateLimit{cost remaining resetAt}
+ repository(owner:$owner,name:$name){
+  issues(first:30,after:$after,orderBy:{field:CREATED_AT,direction:DESC}){
+   pageInfo{hasNextPage endCursor}
+   nodes{number title url state createdAt closedAt author{login __typename} bodyText
+    labels(first:5){nodes{name}}
+    comments(first:20){nodes{author{login __typename} createdAt bodyText}}
+ }}}}"""
+
+
+def _post(client, variables, query=None):
     for attempt in range(6):
         try:
-            r = client.post("https://api.github.com/graphql", json={"query": QUERY, "variables": variables})
+            r = client.post("https://api.github.com/graphql", json={"query": query or QUERY, "variables": variables})
             if r.status_code in (502, 503, 504) or "RESOURCE_LIMITS" in r.text[:300]:
                 raise httpx.HTTPError(f"retryable {r.status_code}")
             r.raise_for_status()
@@ -37,10 +49,10 @@ def _post(client, variables):
     raise RuntimeError("github fetch failed after retries")
 
 
-def fetch_repo(full_name: str, since: str = "2023-01-01") -> int:
+def fetch_repo(full_name: str, since: str = "2023-01-01", kind: str = "pullRequests") -> int:
     """Page newest-to-oldest until PRs predate `since`. Returns PR count cached. Resumable via cursor file."""
     owner, name = full_name.split("/")
-    out = RAW / owner / name
+    out = (RAW if kind == "pullRequests" else RAW.parent / "raw_issues") / owner / name
     out.mkdir(parents=True, exist_ok=True)
     cur_f = out / "_cursor.json"
     state = json.loads(cur_f.read_text()) if cur_f.exists() else {"after": None, "page": 0, "done": False}
@@ -48,8 +60,8 @@ def fetch_repo(full_name: str, since: str = "2023-01-01") -> int:
     n = 0
     with httpx.Client(headers=headers, timeout=60) as client:
         while not state["done"]:
-            data = _post(client, {"owner": owner, "name": name, "after": state["after"]})
-            rl, prs = data["rateLimit"], data["repository"]["pullRequests"]
+            data = _post(client, {"owner": owner, "name": name, "after": state["after"]}, QUERY if kind == "pullRequests" else ISSUE_QUERY)
+            rl, prs = data["rateLimit"], data["repository"][kind]
             nodes = prs["nodes"]
             (out / f"p{state['page']:04d}.json").write_text(json.dumps(nodes), encoding="utf8")
             n += len(nodes)
@@ -65,13 +77,14 @@ def fetch_repo(full_name: str, since: str = "2023-01-01") -> int:
     return n
 
 
-def iter_prs(full_name: str):
+def iter_prs(full_name: str, kind: str = "prs"):
     owner, name = full_name.split("/")
-    for p in sorted((RAW / owner / name).glob("p*.json")):
+    base = RAW if kind == "prs" else RAW.parent / "raw_issues"
+    for p in sorted((base / owner / name).glob("p*.json")):
         yield from json.loads(p.read_text(encoding="utf8"))
 
 
 if __name__ == "__main__":
-    since = "2023-01-01"
-    for repo in sys.argv[1:]:
-        fetch_repo(repo, since)
+    kind = "issues" if sys.argv[1] == "--issues" else "pullRequests"
+    for repo in sys.argv[2 if kind == "issues" else 1:]:
+        fetch_repo(repo, "2024-01-01" if kind == "issues" else "2023-01-01", kind)

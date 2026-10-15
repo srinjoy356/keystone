@@ -4,6 +4,8 @@ import json, math, time
 from pathlib import Path
 from .db import kb, ro
 from .load_decisions import embed
+from . import mem
+from .load import modules_of
 from .queries import signals, repo_signal, DAY
 
 EVAL = Path(__file__).resolve().parent.parent / "data" / "eval_result.json"
@@ -39,11 +41,40 @@ def resolve_module(g, text: str):
                     RETURN m.id, count(f) AS n ORDER BY n DESC LIMIT 5""", {"t": text})
 
 
+TOPIC = """CALL db.idx.vector.queryNodes('PR','emb',40,vecf32($v)) YIELD node, score
+MATCH (p:Person)-[r:AUTHORED|REVIEWED]->(node)
+RETURN p.login, sum((1.0 - score) * (CASE type(r) WHEN 'REVIEWED' THEN 1.0 ELSE 0.6 END) * exp(-($now - node.createdAt) / $tau)) AS s,
+       count(DISTINCT node) AS prs, max(node.createdAt) AS last, p.community"""
+TOPIC_PRS = """CALL db.idx.vector.queryNodes('PR','emb',6,vecf32($v)) YIELD node, score
+RETURN node.id, node.title, score ORDER BY score"""
+
+
 def who_knows(tenant: str, target: str):
+    """Path-like target -> module hierarchy walk. Free-text topic -> vector recall over PRs, then graph expansion to people."""
     g, ev, now = kb(tenant), _ev(), int(time.time())
-    mods = resolve_module(g, target)
+    target = target.strip()
+    mods = resolve_module(g, target) if " " not in target else []
     if not mods:
-        return _out({"error": f"no module or file matches '{target}'"}, ev, "WHO_KNOWS")
+        v = embed([target])[0]
+        rows = ro(g, TOPIC, {"v": v, "now": now, "tau": 540 * DAY})
+        rows = sorted(rows, key=lambda r: -r[1])[:5]
+        if not rows:
+            return _out({"error": f"nothing in the graph relates to '{target}'"}, ev, "WHO_KNOWS_TOPIC")
+        tot = sum(r[1] for r in rows) or 1
+        prs = ro(g, TOPIC_PRS, {"v": v})
+        _n(ev, "topic:" + target[:40], "Topic", target[:40])
+        for pid, title, dist in prs:
+            _n(ev, pid, "PR", pid, title=title)
+            ev["edges"].append({"source": pid, "target": "topic:" + target[:40], "type": "ABOUT"})
+        out = []
+        for login, s, n, last, comm in rows:
+            _n(ev, login, "Person", login, community=comm)
+            out.append({"person": login, "share": round(s / tot, 2), "related_prs": n, "last_active_days": (now - last) // DAY})
+            for pid, _, _ in prs:
+                if ro(g, "MATCH (:Person {login:$u})-[:AUTHORED|REVIEWED]->(:PR {id:$p}) RETURN 1 LIMIT 1", {"u": login, "p": pid}):
+                    ev["edges"].append({"source": login, "target": pid, "type": "WORKED_ON"})
+        return _out({"topic": target, "route": "vector recall over PRs, then graph expansion to authors and reviewers",
+                     "closest_prs": [{"pr": a, "title": b} for a, b, _ in prs], "experts": out}, ev, "WHO_KNOWS_TOPIC")
     mid = mods[0][0]
     rows = ro(g, """MATCH (m:Module {id:$mid})<-[:PARENT*0..3]-(:Module)<-[:IN]-(:File)<-[:TOUCHES]-(pr:PR)<-[r:AUTHORED|REVIEWED]-(p:Person)
                     RETURN p.login, sum((CASE type(r) WHEN 'REVIEWED' THEN 1.0 ELSE 0.5 END) * exp(-($now - pr.createdAt) / $tau)) AS s,
@@ -65,7 +96,7 @@ def _pr(g, ref: str):
     return rows[0] if rows else None
 
 
-def suggest_reviewers(tenant: str, pr: str):
+def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
     g, ev = kb(tenant), _ev()
     row = _pr(g, pr)
     if not row:
@@ -84,6 +115,12 @@ def suggest_reviewers(tenant: str, pr: str):
         mx = max(d.values(), default=0) or 1
         for u, v in d.items():
             tot[u] = tot.get(u, 0) + wt * v / mx
+    notes = []
+    chains = [modules_of(pid.split("#")[0], f.split(":", 1)[1]) for f in files]
+    mods = [x for c in chains for x in c]
+    lvl1 = [c[0] for c in chains]  # top-level directory of each file: the scope a learned rule applies to
+    if user:
+        tot, notes = mem.adjust(user, tot, mods)
     top = sorted(tot, key=lambda u: (-tot[u], u))[:3]
     top = [u for u in top if tot[u] >= 0.15 * tot[top[0]]]  # drop weak candidates rather than list them
     _n(ev, pid, "PR", pid, title=title)
@@ -101,7 +138,8 @@ def suggest_reviewers(tenant: str, pr: str):
                     "signals": {k: round(sig[k].get(u, 0) / (max(sig[k].values(), default=0) or 1), 2) for k in w},
                     "because": [{"pr": a, "title": b, "role": c, "shared_files": d} for a, b, c, d in why]})
     return _out({"pr": pid, "title": title, "author": author, "asof_days_ago": (int(time.time()) - asof) // DAY,
-                 "files": len(files), "suggestions": out}, ev, "SUGGEST_REVIEWERS")
+                 "files": len(files), "suggestions": out, "memory_notes": notes,
+                 "scope": max(set(lvl1), key=lvl1.count, default="*")}, ev, "SUGGEST_REVIEWERS")
 
 
 def bus_factor(tenant: str, repo: str | None = None, limit: int = 6):
@@ -179,5 +217,10 @@ def why_decision(tenant: str, question: str, k: int = 4):
     return _out({"decisions": out}, ev, "WHY_DECISION")
 
 
-TOOLS = {"who_knows": who_knows, "suggest_reviewers": suggest_reviewers, "bus_factor": bus_factor, "bridges": bridges,
+def recall_memory(tenant: str, topic: str, user: str | None = None):
+    ev = _ev()
+    return _out(mem.recall(user, topic) if user else {"note": "no user memory in this session"}, ev, "RECALL_MEMORY")
+
+
+TOOLS = {"recall_memory": recall_memory, "who_knows": who_knows, "suggest_reviewers": suggest_reviewers, "bus_factor": bus_factor, "bridges": bridges,
          "connection": connection, "why_decision": why_decision}

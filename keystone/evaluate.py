@@ -18,7 +18,7 @@ def cases(repo: str):
         r = pr_rows(repo, p)
         truth = {x["u"] for x in r["reviews"]}
         if p["mergedAt"] and r["author"] and truth and r["files"]:
-            out.append({"id": r["pr"]["id"], "repo": repo, "author": r["author"], "asof": r["pr"]["createdAt"],
+            out.append({"id": r["pr"]["id"], "repo": repo, "title": r["pr"]["title"], "author": r["author"], "asof": r["pr"]["createdAt"],
                         "files": [f["id"] for f in r["files"]], "truth": sorted(truth)})
     return sorted(out, key=lambda c: c["asof"])
 
@@ -41,6 +41,33 @@ def gather(tenant: str, repos: list[str]) -> list[dict]:
     return allc
 
 
+EMB = CACHE.parent / "eval_emb.json"
+
+
+def vector_ranks(allc, k=10):
+    """Non-graph baseline: embed title + touched paths, vote with the reviewers of the k most similar EARLIER PRs in the repo."""
+    from .load_decisions import embed
+    cache = json.loads(EMB.read_text()) if EMB.exists() else {}
+    todo = [c for c in allc if c["id"] not in cache]
+    for i in range(0, len(todo), 200):
+        b = todo[i:i + 200]
+        for c, e in zip(b, embed([c["title"] + " | " + " ".join(f.split(":", 1)[1] for f in c["files"][:12]) for c in b])):
+            cache[c["id"]] = e
+    EMB.write_text(json.dumps(cache))
+    for repo in {c["repo"] for c in allc}:
+        cs = sorted((c for c in allc if c["repo"] == repo), key=lambda c: c["asof"])
+        M = np.array([cache[c["id"]] for c in cs]); M /= np.linalg.norm(M, axis=1, keepdims=True)
+        for i, c in enumerate(cs):
+            votes: dict[str, float] = {}
+            if i:
+                sims = M[:i] @ M[i]
+                for j in np.argsort(-sims)[:k]:
+                    for u in cs[j]["truth"]:
+                        if u != c["author"]:
+                            votes[u] = votes.get(u, 0) + float(sims[j])
+            c["vec_rank"] = sorted(votes, key=lambda u: (-votes[u], u))
+
+
 def rank(c, w, tau):
     s = c["sig"][str(tau)]
     tot: dict[str, float] = {}
@@ -55,7 +82,7 @@ def rank(c, w, tau):
 def metrics(cs, w, tau):
     h1, h3, h5, rr = [], [], [], []
     for c in cs:
-        r, t = rank(c, w, tau), set(c["truth"])
+        r, t = (c["vec_rank"] if w == "vector" else rank(c, w, tau)), set(c["truth"])
         pos = next((i for i, u in enumerate(r) if u in t), None)
         h1.append(pos == 0); h3.append(pos is not None and pos < 3); h5.append(pos is not None and pos < 5)
         rr.append(1 / (pos + 1) if pos is not None else 0)
@@ -67,12 +94,14 @@ BASELINES = {  # (weights, tau)
     "recent-reviewers (repo prior)": ({"repo": 1}, 90),
     "popular-reviewers (all-time)": ({"repo": 1}, 365),
     "file-history (CODEOWNERS/blame-style)": ({"file": 1}, 365),
+    "vector-only (embedding kNN, no graph)": ("vector", 0),
 }
 
 
 def run(tenant="falkordb", repos=None):
     repos = repos or sys.argv[1:]
     allc = gather(tenant, repos)
+    vector_ranks(allc)
     val = [c for c in allc if c["split"] == "val"]
     test = [c for c in allc if c["split"] == "test"]
     grid = itertools.product((0, 0.5, 1, 2), repeat=4)
