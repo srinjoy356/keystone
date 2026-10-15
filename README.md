@@ -9,6 +9,7 @@ Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordi
 
 * Live demo: https://keystone-graph.vercel.app (FalkorDB Cloud + Vercel)
 * Demo video: _(filled in at submission)_
+* A real action taken by the agent after human approval: https://github.com/srinjoy356/keystone-sandbox/issues/1
 * Blog post: _(filled in at submission)_
 
 ## Why a graph, and why FalkorDB
