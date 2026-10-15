@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keystone</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--ink:#e8eaf0;--mute:#8b93a7;--acc:#7c9cff;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+@media (prefers-color-scheme: light){:root{--bg:#f6f7fb;--panel:#fff;--line:#e3e6ef;--ink:#161922;--mute:#667085;--acc:#3b5bdb;--ok:#15803d;--warn:#b45309;--bad:#b91c1c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,Segoe UI,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0}h1 span{color:var(--acc)}.sub{color:var(--mute);font-size:12px}
+select,button,input{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+button{cursor:pointer}button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+main{display:grid;grid-template-columns:minmax(320px,430px) 1fr;gap:16px;padding:16px 20px;height:calc(100vh - 62px)}
+@media(max-width:900px){main{grid-template-columns:1fr;height:auto}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0}
+#chat{overflow:auto;padding:14px;flex:1}.msg{margin:0 0 14px}.q{color:var(--acc);font-weight:600}
+.a{white-space:pre-wrap}.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+.chip{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--mute)}
+.chip:hover{color:var(--ink);border-color:var(--acc)}
+form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}form input{flex:1}
+.tabs{display:flex;gap:4px;padding:8px 8px 0;border-bottom:1px solid var(--line)}
+.tab{border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--mute);padding:8px 12px}
+.tab.on{color:var(--ink);background:var(--bg)}
+.pane{display:none;flex:1;min-height:0;overflow:auto;padding:12px}.pane.on{display:block}
+#cy,#ov{width:100%;height:100%;min-height:380px}
+.trace{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;padding:8px 10px}
+.trace b{color:var(--acc)}pre{margin:6px 0 0;white-space:pre-wrap;color:var(--mute);font-size:12px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}.kpi{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.kpi b{display:block;font-size:18px}table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.bar{height:6px;border-radius:3px;background:var(--acc)}.risk{display:grid;gap:8px}
+.legend{font-size:12px;color:var(--mute);margin-top:6px}.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Key<span>stone</span></h1>
+  <div class="sub">Who knows what, and why it was decided. Every answer carries its evidence.</div>
+  <div style="flex:1"></div>
+  <label class="sub">Graph (tenant) <select id="tenant"></select></label>
+</header>
+<main>
+  <section class="card">
+    <div id="chat"><div class="msg sub">Ask about owners, reviewers, risk, or past decisions. Answers come only from graph queries.</div></div>
+    <div class="chips" id="chips"></div>
+    <form id="f"><input id="q" placeholder="e.g. Who should review FalkorDB/GraphRAG-SDK#328?" maxlength="400" autocomplete="off"><button class="primary">Ask</button></form>
+  </section>
+  <section class="card">
+    <div class="tabs">
+      <button class="tab on" data-p="ev">Evidence</button><button class="tab" data-p="tr">How it was found</button>
+      <button class="tab" data-p="rk">Risk map</button><button class="tab" data-p="ov">Network</button><button class="tab" data-p="evl">Eval</button>
+    </div>
+    <div class="pane on" id="ev"><div id="cy"></div><div class="legend" id="leg">Ask a question to see the subgraph behind the answer.</div></div>
+    <div class="pane" id="tr"><div class="sub">Tool calls and the exact Cypher executed (read-only, parameterised).</div><div id="trace"></div></div>
+    <div class="pane" id="rk"></div>
+    <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:420px"></div><div class="legend">Contributor graph: colour = community (label propagation), size = PageRank, edges = author to reviewer.</div></div>
+    <div class="pane" id="evl"></div>
+  </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);let tenant='falkordb',cy=null,ovcy=null;
+const COL={Person:'#7c9cff',PR:'#4ade80',Module:'#fbbf24',File:'#94a3b8',Decision:'#f472b6',Issue:'#fb923c'};
+const PAL=['#7c9cff','#4ade80','#fbbf24','#f472b6','#22d3ee','#fb923c','#a78bfa','#f87171','#2dd4bf','#e879f9'];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const j=async(u,o)=>{const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.statusText);return r.json()};
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab,.pane').forEach(x=>x.classList.remove('on'));t.classList.add('on');$('#'+t.dataset.p).classList.add('on');if(t.dataset.p==='ov')loadOverview();if(t.dataset.p==='rk')loadRisk();if(t.dataset.p==='evl')loadEval();if(cy)cy.resize()});
+const SUGG=['Who should review FalkorDB/GraphRAG-SDK#328?','Which modules are most at risk of losing knowledge?','Who knows the query planner best?','Why did we avoid storing vectors in the graph?','Who connects the different contributor groups?'];
+$('#chips').innerHTML=SUGG.map(s=>`<button class="chip" type="button">${esc(s)}</button>`).join('');
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{$('#q').value=c.textContent;$('#f').requestSubmit()});
+function drawEvidence(ev){
+  if(cy)cy.destroy();
+  const els=[...ev.nodes.map(n=>({data:{id:n.id,label:(n.name||n.id).slice(0,38),kind:n.label}})),...ev.edges.filter(e=>ev.nodes.some(n=>n.id===e.source)&&ev.nodes.some(n=>n.id===e.target)).map((e,i)=>({data:{id:'e'+i,source:e.source,target:e.target,label:e.type}}))];
+  cy=cytoscape({container:$('#cy'),elements:els,layout:{name:'cose',animate:false,padding:20,nodeRepulsion:9000},
+   style:[{selector:'node',style:{'background-color':n=>COL[n.data('kind')]||'#888',label:'data(label)',color:getComputedStyle(document.body).color,'font-size':10,'text-valign':'bottom','text-margin-y':4,width:18,height:18}},
+          {selector:'edge',style:{width:1.4,'line-color':'#667',label:'data(label)','font-size':8,color:'#889','target-arrow-shape':'triangle','target-arrow-color':'#667','curve-style':'bezier'}}]});
+  $('#leg').innerHTML=Object.entries(COL).map(([k,c])=>`<span style="color:${c}">&#9679;</span> ${k}`).join(' &nbsp; ')+' &nbsp; (graph returned by the queries, not decoration)';
+}
+function drawTrace(tr){$('#trace').innerHTML=tr.map(t=>`<div class="trace"><b>${esc(t.tool)}</b>(${esc(JSON.stringify(t.args))}) <span class="sub">${t.ms} ms, ${t.queries.length} queries</span>${t.queries.map(q=>`<pre>${esc(q.cypher)}\n-- ${q.rows} rows, ${q.ms} ms</pre>`).join('')}</div>`).join('')||'<div class="sub">No tools used.</div>'}
+$('#f').onsubmit=async e=>{e.preventDefault();const q=$('#q').value.trim();if(!q)return;$('#q').value='';
+  const m=document.createElement('div');m.className='msg';m.innerHTML=`<div class="q">${esc(q)}</div><div class="a sub">Querying the graph...</div>`;$('#chat').append(m);$('#chat').scrollTop=1e9;
+  try{const r=await j('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant,question:q})});
+    m.querySelector('.a').className='a';m.querySelector('.a').textContent=r.answer;drawEvidence(r.evidence);drawTrace(r.trace);}
+  catch(err){m.querySelector('.a').innerHTML=`<span class="err">${esc(err.message)}</span>`}
+  $('#chat').scrollTop=1e9};
+async function loadOverview(){const o=await j('/api/overview?tenant='+tenant);
+  $('#kp').innerHTML=Object.entries(o.stats).map(([k,v])=>`<div class="kpi"><b>${v}</b>${k}s</div>`).join('');
+  if(ovcy)ovcy.destroy();
+  ovcy=cytoscape({container:$('#ovg'),elements:[...o.nodes.map(n=>({data:{id:n.id,label:n.id,c:n.community,s:10+Math.sqrt(n.pagerank*4000)}})),...o.edges.map((e,i)=>({data:{id:'o'+i,source:e.source,target:e.target}}))],
+   layout:{name:'cose',animate:false,nodeRepulsion:6000},style:[{selector:'node',style:{width:'data(s)',height:'data(s)','background-color':n=>PAL[(n.data('c')||0)%PAL.length],label:'data(label)','font-size':8,color:getComputedStyle(document.body).color}},{selector:'edge',style:{width:.6,'line-color':'#556',opacity:.5}}]})}
+async function loadRisk(){const r=await j('/api/risk?tenant='+tenant);
+  $('#rk').innerHTML=`<h3>Knowledge concentration (modules)</h3><div class="sub">${esc(r.bus_factor.note)}</div><div class="risk">`+r.bus_factor.at_risk_modules.map(m=>`<div class="trace"><b>${esc(m.module)}</b><div class="bar" style="width:${m.share*100}%"></div><span class="sub">top expert ${esc(m.top_expert)} holds ${Math.round(m.share*100)}% of ${m.recent_prs} recent PR touches; ${m.active_backups} active backups; last active ${m.top_expert_last_active_days}d ago</span></div>`).join('')+`</div><h3>Bridge people</h3><table><tr><th>login</th><th>betweenness</th><th>PageRank</th><th>communities reached</th></tr>`+r.bridges.bridge_people.map(b=>`<tr><td>${esc(b.person)}</td><td>${b.bridge_score}</td><td>${b.pagerank}</td><td>${b.communities_reached}</td></tr>`).join('')+'</table>'}
+async function loadEval(){const e=await j('/api/eval');if(!e.test){$('#evl').innerHTML='<div class="sub">No eval yet.</div>';return}
+  $('#evl').innerHTML=`<h3>Predict the real reviewers of ${e.n_test} later PRs (history before each PR only)</h3><table><tr><th>method</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr>`+Object.entries(e.test).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v['hit@1'].toFixed(2)}</td><td>${v['hit@3'].toFixed(2)}</td><td>${v.mrr.toFixed(2)}</td></tr>`).join('')+`</table><div class="legend">Weights tuned on a separate validation slice. Time-split, no leakage. Reported honestly per repo in the README.</div>`}
+(async()=>{try{const ts=await j('/api/tenants');$('#tenant').innerHTML=ts.map(t=>`<option>${esc(t)}</option>`).join('');tenant=ts.includes('falkordb')?'falkordb':ts[0];$('#tenant').value=tenant}catch(e){}
+ $('#tenant').onchange=e=>{tenant=e.target.value}})();
+</script>
+</body>
+</html>
