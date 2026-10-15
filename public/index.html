@@ -111,7 +111,9 @@ async function loadBoard(){const b=await j('/api/coord/board?tenant='+tenant);
   document.querySelectorAll('#board [data-d]').forEach(x=>x.onclick=async()=>{await post('/api/coord/decide',{task:x.dataset.t,approve:x.dataset.d==='1'});loadBoard()})}
 $('#b-tri').onclick=async()=>{const r=await post('/api/coord/triage',{});$('#b-tri').textContent='1. Triage agent: queued '+r.queued;loadBoard()};
 $('#b-route').onclick=async()=>{await post('/api/coord/route',{worker:'router-'+(1+Math.floor(Math.random()*3))});loadBoard()};
-(async()=>{try{const ts=await j('/api/tenants');$('#tenant').innerHTML=ts.map(t=>`<option>${esc(t)}</option>`).join('');tenant=ts.includes('falkordb')?'falkordb':ts[0];$('#tenant').value=tenant}catch(e){}
+(async()=>{try{const ex=await j('/example.json');const m=document.createElement('div');m.className='msg';
+  m.innerHTML=`<div class="sub">Example answer (pre-computed, ask your own below)</div><div class="q">${esc(ex.question)}</div><div class="a">${link(esc(ex.answer))}</div>`;$('#chat').append(m);drawEvidence(ex.evidence);drawTrace(ex.trace)}catch(e){}
+ try{const ts=await j('/api/tenants');$('#tenant').innerHTML=ts.map(t=>`<option>${esc(t)}</option>`).join('');tenant=ts.includes('falkordb')?'falkordb':ts[0];$('#tenant').value=tenant}catch(e){}
  $('#tenant').onchange=e=>{tenant=e.target.value}})();
 </script>
 </body>

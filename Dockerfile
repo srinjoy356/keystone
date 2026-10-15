@@ -9,9 +9,9 @@ COPY keystone keystone
 COPY public public
 COPY data/eval_result.json data/qa_eval.json data/
 COPY seed/dump.rdb.gz /tmp/dump.rdb.gz
-RUN gunzip -c /tmp/dump.rdb.gz > /var/lib/falkordb/data/dump.rdb && rm /tmp/dump.rdb.gz
+RUN mkdir -p /var/lib/falkordb/data && gunzip -c /tmp/dump.rdb.gz > /var/lib/falkordb/data/dump.rdb && rm /tmp/dump.rdb.gz
 COPY docker-entrypoint.sh /entry.sh
 RUN chmod +x /entry.sh
-ENV PORT=8000 PYTHONPATH=/app
+ENV PYTHONPATH=/app
 EXPOSE 8000 3000
 ENTRYPOINT ["/entry.sh"]

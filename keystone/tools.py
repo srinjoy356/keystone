@@ -165,7 +165,12 @@ def bus_factor(tenant: str, repo: str | None = None, limit: int = 6):
         risk.append({"module": m, "top_expert": top[0], "share": round(share, 2), "active_backups": len(backups),
                      "recent_prs": total, "top_expert_last_active_days": (now - top[2]) // DAY,
                      "score": share * math.log(1 + total) * (1.5 if not backups else 1)})
-    risk = sorted(risk, key=lambda r: -r["score"])[:limit]
+    picked, per_repo = [], {}
+    for r in sorted(risk, key=lambda r: -r["score"]):  # at most 2 per repo so one busy repo cannot fill the list
+        repo_name = r["module"].split(":", 1)[0]
+        if per_repo.get(repo_name, 0) < 2:
+            picked.append(r); per_repo[repo_name] = per_repo.get(repo_name, 0) + 1
+    risk = picked[:limit]
     for r in risk:
         _n(ev, r["module"], "Module", r["module"], risk=round(r["score"], 2))
         _n(ev, r["top_expert"], "Person", r["top_expert"])
