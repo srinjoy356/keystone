@@ -12,6 +12,30 @@ Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordi
 * A real action taken by the agent after human approval: https://github.com/srinjoy356/keystone-sandbox/issues/1
 * Blog post: _(filled in at submission)_
 
+## Architecture
+
+```mermaid
+flowchart LR
+  GH[(Public GitHub history<br/>PRs, reviews, issues)] -->|"fetch (cached, resumable)"| L[load.py<br/>idempotent MERGE]
+  L --> KB[("FalkorDB<br/>kb_tenant graph")]
+  KB --> D[derive.py<br/>PageRank, betweenness,<br/>label propagation]
+  D --> KB
+  T[decisions.py<br/>LLM proposes, code verifies quote] --> KB
+  KB --> TL["9 fixed read-only tools<br/>(parameterised Cypher, RO_QUERY)"]
+  TL --> AG[Agent<br/>gpt-4o-mini tool loop]
+  TL --> MCP[MCP server]
+  AG --> UI[Web UI<br/>answer + evidence graph + Cypher trace]
+  AG <--> MEM[("mem_user graph<br/>episodes, feedback, rules")]
+  AG <--> OPS[("ops_tenant graph<br/>Task queue, atomic claim")]
+  OPS --> ACT[Executor<br/>sandbox issue on approval]
+```
+
+| Track | Where it is satisfied |
+|---|---|
+| **1. Agents That Act on Connected Data** | Multi-hop reviewer scoring, graph algorithms (PageRank, betweenness, shortest path) as agent tools, MCP server for tool selection by any client, evidence subgraph and Cypher for every answer, an approved recommendation becomes a real issue in a sandbox repo |
+| **2. Agent Memory and Coordination** | Working memory (last turns), episodic memory (past questions linked to entities), semantic memory (accept/reject feedback), procedural memory (expiring `AVOID` rules, also written in plain English), one graph per user, a two-agent task queue with an atomic claim tested under 12 racing threads |
+| **3. Company Brain** | People, teams, modules, PRs and issues in one graph; ownership and knowledge-risk per module; decisions traced to the PR or issue thread with verified verbatim quotes and a dated list of related decisions; topic questions answered by vector recall then graph expansion |
+
 ## Why a graph, and why FalkorDB
 
 The question "who should review this PR" is a multi-hop question: PR -> files -> directories -> every earlier PR in those directories -> the people who authored or reviewed them, weighted by how recently, plus who has reviewed this author before. A similarity search over text cannot answer it; a graph traversal answers it in tens of milliseconds. Remove FalkorDB and the product has nothing to run on: scoring, risk, communities, decision tracing and agent memory are all Cypher or FalkorDB procedures.
@@ -106,7 +130,7 @@ Seven FalkorDB repositories, 542 test PRs from the later part of each repo's his
 | Vector only (embed title + paths, kNN, no graph) | 0.48 | 0.82 | 0.88 | 0.65 |
 | **Keystone (graph blend)** | **0.57** | **0.93** | **0.98** | **0.75** |
 
-Keystone beats the strongest classic baseline (file history) on hit@3 by **+5.9 points, 95% bootstrap CI [+3.5, +8.1]**. It wins or ties on every repo; the hardest is `FalkorDB/docs` (hit@3 0.65 vs 0.58 file history), where reviewers rotate the most. The tuned blend ended up using file history (weight 2) and the author-to-reviewer social edges (weight 0.5) with a 90-day half-life-style decay; the module-hierarchy signal got weight 0 on this data, so it is used for the "who knows this module" tool rather than for reviewer prediction.
+Keystone beats the strongest classic baseline (file history) on hit@3 by **+5.9 points, 95% bootstrap CI [+3.5, +8.1]**. It wins or ties on every repo; the hardest is `FalkorDB/docs` (hit@3 0.65 vs 0.58 file history). Reading the misses shows why: the docs team's main reviewer changed between the tuning period and the test period, so any method trained on the past is pulled toward people who stopped reviewing. The tuned blend ended up using file history (weight 2) and the author-to-reviewer social edges (weight 0.5) with a 90-day half-life-style decay; the module-hierarchy signal got weight 0 on this data, so it is used for the "who knows this module" tool rather than for reviewer prediction.
 
 Other checks (`python -m keystone.qa_eval`):
 

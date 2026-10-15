@@ -17,6 +17,12 @@ HITS: dict[str, deque] = defaultdict(deque)
 LIMIT, WINDOW = 25, 3600
 
 
+def client_ip(request: Request) -> str:
+    """Behind Vercel the socket peer is the proxy; the visitor is the first X-Forwarded-For hop."""
+    xff = request.headers.get("x-forwarded-for", "")
+    return xff.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+
 def limited(ip: str) -> bool:
     q, now = HITS[ip], time.time()
     while q and now - q[0] > WINDOW:
@@ -34,24 +40,30 @@ def budget_ok() -> bool:
     return n <= int(env("DAILY_ASK_CAP", "400"))
 
 
+class Turn(BaseModel):
+    q: str = Field(max_length=400)
+    a: str = Field(max_length=1200)
+
+
 class Ask(BaseModel):
     tenant: str = "falkordb"
     question: str = Field(min_length=3, max_length=400)
     user: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    history: list[Turn] = Field(default_factory=list, max_length=3)  # working memory: the last few turns of this chat
 
 
 class Coord(BaseModel):
     tenant: str = "falkordb"
     worker: str = Field(default="router-1", pattern=r"^[A-Za-z0-9_-]{1,30}$")
-    task: str = Field(default="", max_length=120)
+    task: str = Field(default="", pattern=r"^([A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}#\d{1,7})?$")
     approve: bool = False
     user: str = Field(default="demo", pattern=r"^[A-Za-z0-9_-]{1,40}$")
 
 
 class Feedback(BaseModel):
     user: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
-    pr: str = Field(max_length=120)
-    person: str = Field(max_length=60)
+    pr: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}#\d{1,7}$")
+    person: str = Field(pattern=r"^[A-Za-z0-9-]{1,39}$")
     verdict: str
     reason: str = Field(default="", max_length=200)
     scope: str = Field(default="*", max_length=160)
@@ -64,13 +76,14 @@ def tenants():
 
 @app.post("/api/ask")
 def api_ask(body: Ask, request: Request):
-    if limited(request.client.host if request.client else "?"):
+    if limited(client_ip(request)):
         raise HTTPException(429, "demo rate limit reached, try again later")
     if not budget_ok():
         raise HTTPException(429, "daily demo budget reached, please come back tomorrow")
     if graph_name("kb", body.tenant) not in db().list_graphs():
         raise HTTPException(404, "unknown tenant")
-    return ask(body.tenant, body.question, body.user)
+    turns = [m for t in body.history for m in ({"role": "user", "content": t.q}, {"role": "assistant", "content": t.a})]
+    return ask(body.tenant, body.question, body.user, turns)
 
 
 @app.post("/api/feedback")
@@ -83,7 +96,7 @@ def feedback(body: Feedback):
 
 
 def guard(request: Request):
-    if limited(request.client.host if request.client else "?"):
+    if limited(client_ip(request)):
         raise HTTPException(429, "demo rate limit reached, try again later")
 
 

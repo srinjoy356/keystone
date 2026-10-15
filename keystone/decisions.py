@@ -68,7 +68,8 @@ def extract(client, model, pr, ms):
     return json.loads(r.choices[0].message.content).get("decisions", [])
 
 
-def run(repo: str, limit: int = 400, workers: int = 8, kind: str = "prs"):
+def run(repo: str, limit: int | None = None, workers: int = 8, kind: str = "prs"):
+    limit = limit or int(env("DECISION_LIMIT", "400"))
     client, model = OpenAI(api_key=env("OPENAI_API_KEY")), env("OPENAI_MODEL", "gpt-4o-mini")
     OUT.mkdir(parents=True, exist_ok=True)
     f = OUT / (repo.replace("/", "__") + ("" if kind == "prs" else "__issues") + ".json")

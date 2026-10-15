@@ -97,7 +97,7 @@ def _pr(g, ref: str):
     return rows[0] if rows else None
 
 
-def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
+def suggest_reviewers(tenant: str, pr: str, n: int = 3, user: str | None = None):
     g, ev = kb(tenant), _ev()
     row = _pr(g, pr)
     if not row:
@@ -122,8 +122,9 @@ def suggest_reviewers(tenant: str, pr: str, user: str | None = None):
     lvl1 = [c[0] for c in chains]  # top-level directory of each file: the scope a learned rule applies to
     if user:
         tot, notes = mem.adjust(user, tot, mods)
-    top = sorted(tot, key=lambda u: (-tot[u], u))[:3]
-    top = [u for u in top if tot[u] >= 0.15 * tot[top[0]]]  # drop weak candidates rather than list them
+    n = max(1, min(int(n), 8))
+    top = sorted(tot, key=lambda u: (-tot[u], u))[:n]
+    top = [u for u in top if tot[u] >= (0.15 if n <= 3 else 0.03) * tot[top[0]]]  # drop weak candidates rather than list them; widen only when asked
     _n(ev, pid, "PR", pid, title=title)
     out = []
     for u in top:

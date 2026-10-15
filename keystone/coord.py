@@ -50,7 +50,7 @@ def claim(tenant: str, worker: str):
 
 
 def propose(tenant: str, task_id: str, worker: str, user: str | None = None):
-    res = tools.suggest_reviewers(tenant, task_id, user)["data"]
+    res = tools.suggest_reviewers(tenant, task_id, user=user)["data"]
     og(tenant).query("MATCH (t:Task {id:$id, by:$w, status:'claimed'}) SET t.status='proposed', t.proposal=$p",
                      {"id": task_id, "w": worker, "p": json.dumps(res)})
     return res
