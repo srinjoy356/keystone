@@ -66,3 +66,12 @@ def adjust(user: str, scores: dict[str, float], modules: list[str]):
         if login in scores:
             scores[login] *= 1 + 0.1 * min(n, 3)
     return scores, notes
+
+
+def summary(user: str):
+    g, now = mg(user), int(time.time())
+    rules = ro(g, "MATCH (:User)-[a:AVOID]->(p:Person) RETURN p.login, a.scope, a.reason, a.pr, a.until ORDER BY a.until DESC LIMIT 20")
+    fb = ro(g, "MATCH (:User)-[f:FEEDBACK]->(p:Person) RETURN f.verdict, count(f)")
+    eps = ro(g, "MATCH (e:Episode) RETURN e.q, e.ts, e.tools ORDER BY e.ts DESC LIMIT 8")
+    return {"rules": [{"person": a, "scope": b, "reason": c, "pr": d, "expires_in_days": max(0, (e - now) // DAY)} for a, b, c, d, e in rules],
+            "feedback": dict(fb), "episodes": [{"q": q, "days_ago": (now - t) // DAY, "tools": tl} for q, t, tl in eps]}

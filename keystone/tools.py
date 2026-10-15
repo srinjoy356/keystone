@@ -203,17 +203,17 @@ def connection(tenant: str, a: str, b: str):
 def why_decision(tenant: str, question: str, k: int = 4):
     g, ev = kb(tenant), _ev()
     rows = ro(g, """CALL db.idx.vector.queryNodes('Decision','emb',$k,vecf32($v)) YIELD node, score
-                    MATCH (node)-[:DECIDED_IN]->(pr:PR) OPTIONAL MATCH (p:Person)-[:STATED]->(node)
-                    RETURN node.id, node.text, node.why, node.quote, node.ts, pr.id, pr.title, pr.url, p.login, score ORDER BY score""",
+                    MATCH (node)-[:DECIDED_IN]->(pr) OPTIONAL MATCH (p:Person)-[:STATED]->(node)
+                    RETURN node.id, node.text, node.why, node.quote, node.ts, pr.id, pr.title, pr.url, p.login, score, labels(pr)[0] ORDER BY score""",
               {"k": k, "v": embed([question])[0]})
     out = []
-    for did, text, why, quote, ts, pid, ptitle, url, who, score in rows:
-        _n(ev, did, "Decision", text[:60]); _n(ev, pid, "PR", pid, title=ptitle)
+    for did, text, why, quote, ts, pid, ptitle, url, who, score, kind in rows:
+        _n(ev, did, "Decision", text[:60]); _n(ev, pid, kind, pid, title=ptitle)
         ev["edges"].append({"source": did, "target": pid, "type": "DECIDED_IN"})
         if who:
             _n(ev, who, "Person", who); ev["edges"].append({"source": who, "target": did, "type": "STATED"})
         out.append({"decision": text, "rationale": why, "verbatim_quote": quote, "stated_by": who, "pr": pid, "pr_title": ptitle,
-                    "url": url, "date": time.strftime("%Y-%m-%d", time.gmtime(ts)), "distance": round(score, 2)})
+                    "source_kind": kind, "url": url, "date": time.strftime("%Y-%m-%d", time.gmtime(ts)), "distance": round(score, 2)})
     return _out({"decisions": out}, ev, "WHY_DECISION")
 
 

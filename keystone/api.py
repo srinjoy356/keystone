@@ -2,7 +2,7 @@
 import json, time
 from collections import defaultdict, deque
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -99,6 +99,11 @@ def c_decide(b: Coord, request: Request):
 @app.get("/api/coord/board")
 def c_board(tenant: str = "falkordb"):
     return coord.board(tenant)
+
+
+@app.get("/api/memory")
+def memory(user: str = Query(pattern=r"^[A-Za-z0-9_-]{1,40}$")):
+    return mem.summary(user)
 
 
 @app.get("/api/overview")

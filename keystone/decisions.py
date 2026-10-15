@@ -20,7 +20,7 @@ Return JSON {"decisions":[...]} with at most 3 items."""
 def messages(pr: dict) -> list[dict]:
     ms = [{"id": "m0", "who": human(pr["author"]) or "unknown", "text": (pr["bodyText"] or "")[:1500]}]
     for kind, key in (("review", "reviews"), ("comment", "comments")):
-        for n in pr[key]["nodes"]:
+        for n in pr.get(key, {"nodes": []})["nodes"]:
             u = human(n["author"])
             if u and len(n["bodyText"] or "") > 40:
                 ms.append({"id": f"m{len(ms)}", "who": u, "text": n["bodyText"][:1200]})
@@ -68,13 +68,13 @@ def extract(client, model, pr, ms):
     return json.loads(r.choices[0].message.content).get("decisions", [])
 
 
-def run(repo: str, limit: int = 400, workers: int = 8):
+def run(repo: str, limit: int = 400, workers: int = 8, kind: str = "prs"):
     client, model = OpenAI(api_key=env("OPENAI_API_KEY")), env("OPENAI_MODEL", "gpt-4o-mini")
     OUT.mkdir(parents=True, exist_ok=True)
-    f = OUT / (repo.replace("/", "__") + ".json")
+    f = OUT / (repo.replace("/", "__") + ("" if kind == "prs" else "__issues") + ".json")
     done = json.loads(f.read_text()) if f.exists() else {}
     cands = []
-    for pr in iter_prs(repo):
+    for pr in iter_prs(repo, kind):
         ms = messages(pr)
         if pr["number"] and f"{repo}#{pr['number']}" not in done and score(ms) >= 3:
             cands.append((score(ms), pr, ms))
@@ -105,5 +105,6 @@ def run(repo: str, limit: int = 400, workers: int = 8):
 
 
 if __name__ == "__main__":
-    for repo in sys.argv[1:]:
-        run(repo)
+    kind = "issues" if sys.argv[1] == "--issues" else "prs"
+    for repo in sys.argv[2 if kind == "issues" else 1:]:
+        run(repo, kind=kind)

@@ -17,7 +17,7 @@ def embed(texts: list[str]) -> list[list[float]]:
     return out
 
 
-def load(tenant: str, repo: str) -> int:
+def load(tenant: str, repo: str, kind: str = "prs") -> int:
     g = kb(tenant)
     try:
         g.query(f"CREATE VECTOR INDEX FOR (d:Decision) ON (d.emb) OPTIONS {{dimension:{DIM}, similarityFunction:'cosine'}}")
@@ -25,7 +25,7 @@ def load(tenant: str, repo: str) -> int:
     except Exception as e:
         if "already indexed" not in str(e).lower():
             raise
-    data = json.loads((OUT / (repo.replace("/", "__") + ".json")).read_text())
+    data = json.loads((OUT / (repo.replace("/", "__") + ("" if kind == "prs" else "__issues") + ".json")).read_text())
     rows = []
     for pid, v in data.items():
         for d in v["decisions"]:
@@ -38,13 +38,15 @@ def load(tenant: str, repo: str) -> int:
     for r, e in zip(rows, embs):
         r["emb"] = e
     for i in range(0, len(rows), 50):
-        g.query("""UNWIND $rows AS r MATCH (pr:PR {id:r.pr})
-                   MERGE (d:Decision {id:r.id}) SET d.text=r.text, d.why=r.why, d.quote=r.quote, d.ts=r.ts, d.emb=vecf32(r.emb)
-                   MERGE (d)-[:DECIDED_IN]->(pr)
-                   WITH d, r MATCH (p:Person {login:r.who}) MERGE (p)-[:STATED]->(d)""", {"rows": rows[i:i + 50]})
+        for label in ("PR", "Issue"):  # a decision's source is a PR thread or an issue (ticket) thread
+            g.query(f"""UNWIND $rows AS r MATCH (src:{label} {{id:r.pr}})
+                       MERGE (d:Decision {{id:r.id}}) SET d.text=r.text, d.why=r.why, d.quote=r.quote, d.ts=r.ts, d.emb=vecf32(r.emb), d.kind='{label}'
+                       MERGE (d)-[:DECIDED_IN]->(src)
+                       WITH d, r MATCH (p:Person {{login:r.who}}) MERGE (p)-[:STATED]->(d)""", {"rows": rows[i:i + 50]})
     return len(rows)
 
 
 if __name__ == "__main__":
-    for repo in sys.argv[2:]:
-        print(repo, load(sys.argv[1], repo))
+    kind = "issues" if sys.argv[2] == "--issues" else "prs"
+    for repo in sys.argv[3 if kind == "issues" else 2:]:
+        print(repo, load(sys.argv[1], repo, kind))

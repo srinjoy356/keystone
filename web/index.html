@@ -49,13 +49,14 @@ form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}form inp
   <section class="card">
     <div class="tabs">
       <button class="tab on" data-p="ev">Evidence</button><button class="tab" data-p="tr">How it was found</button>
-      <button class="tab" data-p="rk">Risk map</button><button class="tab" data-p="ho">Handoff</button><button class="tab" data-p="ov">Network</button><button class="tab" data-p="evl">Eval</button>
+      <button class="tab" data-p="rk">Risk map</button><button class="tab" data-p="ho">Handoff</button><button class="tab" data-p="me">Memory</button><button class="tab" data-p="ov">Network</button><button class="tab" data-p="evl">Eval</button>
     </div>
     <div class="pane on" id="ev"><div id="cy"></div><div class="legend" id="leg">Ask a question to see the subgraph behind the answer.</div></div>
     <div class="pane" id="tr"><div class="sub">Tool calls and the exact Cypher executed (read-only, parameterised).</div><div id="trace"></div></div>
     <div class="pane" id="rk"></div>
     <div class="pane" id="ho"><div class="sub">Two agents coordinate through shared graph state. Triage queues open PRs with a risk note; Router workers claim tasks atomically and propose reviewers; you approve; an executor acts (dry-run unless a write token and allowlisted repo are configured).</div>
   <p><button id="b-tri">1. Triage agent: queue open PRs</button> <button id="b-route">2. Router agent: claim next + propose</button></p><div id="board"></div></div>
+    <div class="pane" id="me"><div class="sub">What Keystone remembers about you, stored in your own graph (mem_&lt;you&gt;), isolated from every other user.</div><div id="memo"></div></div>
     <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:420px"></div><div class="legend">Contributor graph: colour = community (label propagation), size = PageRank, edges = author to reviewer.</div></div>
     <div class="pane" id="evl"></div>
   </section>
@@ -67,7 +68,7 @@ const COL={Person:'#7c9cff',PR:'#4ade80',Module:'#fbbf24',File:'#94a3b8',Decisio
 const PAL=['#7c9cff','#4ade80','#fbbf24','#f472b6','#22d3ee','#fb923c','#a78bfa','#f87171','#2dd4bf','#e879f9'];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const j=async(u,o)=>{const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.statusText);return r.json()};
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab,.pane').forEach(x=>x.classList.remove('on'));t.classList.add('on');$('#'+t.dataset.p).classList.add('on');if(t.dataset.p==='ov')loadOverview();if(t.dataset.p==='ho')loadBoard();if(t.dataset.p==='rk')loadRisk();if(t.dataset.p==='evl')loadEval();if(cy)cy.resize()});
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab,.pane').forEach(x=>x.classList.remove('on'));t.classList.add('on');$('#'+t.dataset.p).classList.add('on');if(t.dataset.p==='ov')loadOverview();if(t.dataset.p==='ho')loadBoard();if(t.dataset.p==='me')loadMemory();if(t.dataset.p==='rk')loadRisk();if(t.dataset.p==='evl')loadEval();if(cy)cy.resize()});
 const SUGG=['Who should review FalkorDB/GraphRAG-SDK#328?','Which modules are most at risk of losing knowledge?','Who knows the query planner best?','Why did we avoid storing vectors in the graph?','Who connects the different contributor groups?'];
 $('#chips').innerHTML=SUGG.map(s=>`<button class="chip" type="button">${esc(s)}</button>`).join('');
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{$('#q').value=c.textContent;$('#f').requestSubmit()});
@@ -98,6 +99,9 @@ async function loadRisk(){const r=await j('/api/risk?tenant='+tenant);
 async function loadEval(){const e=await j('/api/eval');if(!e.test){$('#evl').innerHTML='<div class="sub">No eval yet.</div>';return}
   $('#evl').innerHTML=`<h3>Predict the real reviewers of ${e.n_test} later PRs (history before each PR only)</h3><table><tr><th>method</th><th>hit@1</th><th>hit@3</th><th>MRR</th></tr>`+Object.entries(e.test).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v['hit@1'].toFixed(2)}</td><td>${v['hit@3'].toFixed(2)}</td><td>${v.mrr.toFixed(2)}</td></tr>`).join('')+`</table><div class="legend">Weights tuned on a separate validation slice. Time-split, no leakage. Reported honestly per repo in the README.</div>`}
 const post=(u,b)=>j(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant,user:USER,...b})});
+async function loadMemory(){const m=await j('/api/memory?user='+USER);
+  $('#memo').innerHTML=`<h3>Learned rules (procedural)</h3>`+(m.rules.length?m.rules.map(r=>`<div class="trace">Avoid <b>${esc(r.person)}</b> under <code>${esc(r.scope)}</code> <span class="sub">(${esc(r.reason||'no reason given')}; from ${esc(r.pr)}; expires in ${r.expires_in_days}d)</span></div>`).join(''):'<div class="sub">None yet. Ask for reviewers, then press "skip them" on a suggestion.</div>')
+   +`<h3>Feedback so far</h3><div class="sub">${esc(JSON.stringify(m.feedback))}</div><h3>Recent questions (episodic)</h3>`+(m.episodes.map(e=>`<div class="trace">${esc(e.q)} <span class="sub">${e.days_ago}d ago via ${esc((e.tools||[]).join(', '))}</span></div>`).join('')||'<div class="sub">Nothing yet.</div>')}
 async function loadBoard(){const b=await j('/api/coord/board?tenant='+tenant);
   $('#board').innerHTML=b.length?b.map(t=>`<div class="trace"><b>${esc(t.id)}</b> <span class="sub">${esc(t.status)}${t.by?' by '+esc(t.by):''} | prio ${t.prio}</span><div>${esc(t.title)}</div>${t.risk.length?`<div class="sub">touches at-risk: ${t.risk.map(esc).join(', ')}</div>`:''}${t.status==='proposed'?`<button data-d="1" data-t="${esc(t.id)}">Approve</button> <button data-d="0" data-t="${esc(t.id)}">Reject</button>`:''}${t.action?`<pre>action: ${esc(t.action)}</pre>`:''}</div>`).join(''):'<div class="sub">No tasks yet. Run the Triage agent.</div>';
   document.querySelectorAll('#board [data-d]').forEach(x=>x.onclick=async()=>{await post('/api/coord/decide',{task:x.dataset.t,approve:x.dataset.d==='1'});loadBoard()})}

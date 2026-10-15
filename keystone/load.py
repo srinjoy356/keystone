@@ -90,6 +90,24 @@ def load_repo(tenant: str, repo: str, batch: int = 100) -> dict:
     return {"prs": len(rows), "people": len(people)}
 
 
+def load_issues(tenant: str, repo: str) -> int:
+    """Issues are the 'tickets' source: opener and commenters link to people, and decisions can be traced to them."""
+    g = kb(tenant)
+    ensure_indexes(g)
+    rows = []
+    for i in iter_prs(repo, kind="issues"):
+        author = human(i["author"])
+        rows.append({"id": f"{repo}#{i['number']}", "title": i["title"], "url": i["url"], "state": i["state"], "createdAt": ts(i["createdAt"]),
+                     "author": author, "commenters": sorted({u for c in i["comments"]["nodes"] if (u := human(c["author"])) and u != author})})
+    g.query(STMTS["people"], {"rows": sorted({x for r in rows for x in ([r["author"]] if r["author"] else []) + r["commenters"]})})
+    for k in range(0, len(rows), 100):
+        b = rows[k:k + 100]
+        g.query("UNWIND $rows AS r MERGE (i:Issue {id:r.id}) SET i.title=r.title, i.url=r.url, i.state=r.state, i.createdAt=r.createdAt", {"rows": b})
+        g.query("UNWIND $rows AS r MATCH (i:Issue {id:r.id}) MATCH (p:Person {login:r.author}) MERGE (p)-[:OPENED]->(i)", {"rows": b})
+        g.query("UNWIND $rows AS r UNWIND r.commenters AS u MATCH (i:Issue {id:r.id}) MATCH (p:Person {login:u}) MERGE (p)-[:COMMENTED]->(i)", {"rows": b})
+    return len(rows)
+
+
 def stats(tenant: str) -> dict:
     g = kb(tenant)
     out = {}
