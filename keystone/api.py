@@ -133,11 +133,14 @@ def memory(user: str = Query(pattern=r"^[A-Za-z0-9_-]{1,40}$")):
 def overview(tenant: str = "falkordb"):
     g = kb(tenant)
     stats = {l: ro(g, f"MATCH (n:{l}) RETURN count(n)")[0][0] for l in ("Person", "PR", "File", "Module", "Decision")}
-    people = ro(g, "MATCH (p:Person) WHERE p.pagerank IS NOT NULL RETURN p.login, p.home, p.pagerank, p.acts ORDER BY p.acts DESC LIMIT 120")
+    people = ro(g, "MATCH (p:Person) WHERE p.pagerank IS NOT NULL RETURN p.login, p.home, p.pagerank, p.acts ORDER BY p.acts DESC LIMIT 200")
     keep = {p[0] for p in people}
-    links = [r for r in ro(g, "MATCH (a:Person)-[c:COLLAB]->(b:Person) WHERE c.n >= 2 RETURN a.login, b.login, c.n") if r[0] in keep and r[1] in keep]
-    return {"stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in people],
-            "edges": [{"source": a, "target": b, "n": n} for a, b, n in links]}
+    links = [r for r in ro(g, "MATCH (a:Person)-[c:COLLAB]->(b:Person) WHERE c.n >= 1 RETURN a.login, b.login, c.n") if r[0] in keep and r[1] in keep]
+    linked = {x for r in links for x in r[:2]}  # isolated contributors would only be dots in rows: show the connected network
+    nodes = [p for p in people if p[0] in linked][:90]
+    ids = {p[0] for p in nodes}
+    return {"stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in nodes],
+            "edges": [{"source": a, "target": b, "n": n} for a, b, n in links if a in ids and b in ids]}
 
 
 @app.get("/api/risk")

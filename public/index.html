@@ -85,7 +85,7 @@ table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1p
       <div class="sub">Two agents coordinate through shared graph state. The Triage agent queues open PRs with a risk note. Router workers claim tasks with one atomic write and propose reviewers. You approve, and an executor acts: it opens an issue in a sandbox repo (never in the project being analysed). Without a write token it is a dry run.</div>
       <p><button id="b-tri">1. Triage agent: queue open PRs</button> <button id="b-route">2. Router agent: claim next and propose</button></p><div id="board"></div></div>
     <div class="pane" id="me"><div class="sub">What Keystone remembers about you, stored in your own graph (mem_&lt;you&gt;), isolated from every other user. Try: "Naseem77 is on leave for two weeks. Who should review FalkorDB/GraphRAG-SDK#328?"</div><div id="memo"></div></div>
-    <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:430px"></div><div class="legend">Contributors: colour = home repo, size = PageRank (reviewing authority), edges = author to reviewer or commenter. Bridge people (betweenness) are in the Risk map.</div></div>
+    <div class="pane" id="ov"><div class="kpis" id="kp"></div><div id="ovg" style="height:480px"></div><div id="ovinfo" class="sub">Hover a node for the login and home repo; click to open the GitHub profile.</div><div class="legend">Connected contributors only. Colour = home repo, size = PageRank (reviewing authority), edges = author to reviewer or commenter. Names shown for the 22 most influential; bridge people (betweenness) are in the Risk map.</div></div>
     <div class="pane" id="evl"></div>
   </section>
 </main>
@@ -119,15 +119,24 @@ function nodeInfo(d){
   else if(k==='Person')h+=` <a href="https://github.com/${esc(id)}" target="_blank" rel="noopener">github.com/${esc(id)}</a>`;
   else if(k==='Module')h+=` <span class="sub">${esc(id)}</span>`;
   $('#node').innerHTML=h}
+const short=n=>{const id=n.id,k=n.label;
+  if(/^[^\s#]+\/[^\s#]+#\d+$/.test(id))return id.split('/').pop();            // repo#123
+  if(k==='Module')return id.split(':').pop().split('/').slice(-2).join('/')||id;
+  if(k==='Decision'||k==='Topic')return (n.name||id).slice(0,26)+((n.name||id).length>26?'...':'');
+  return (n.name||id).slice(0,24)};
 function drawEvidence(ev){
   if(cy)cy.destroy();
   const ids=new Set(ev.nodes.map(n=>n.id));
-  const els=[...ev.nodes.map(n=>({data:{id:n.id,label:(n.name||n.id).slice(0,34),kind:n.label,title:n.title||n.name}})),
+  const els=[...ev.nodes.map(n=>({data:{id:n.id,label:short(n),kind:n.label,title:n.title||n.name}})),
     ...ev.edges.filter(e=>ids.has(e.source)&&ids.has(e.target)).map((e,i)=>({data:{id:'e'+i,source:e.source,target:e.target,label:e.type}}))];
-  cy=cytoscape({container:$('#cy'),elements:els,layout:{name:'cose',animate:false,padding:24,nodeRepulsion:9000,idealEdgeLength:90},
-   style:[{selector:'node',style:{'background-color':n=>COL[n.data('kind')]||'#888',label:'data(label)',color:css(),'font-size':10,'text-valign':'bottom','text-margin-y':4,width:20,height:20,'text-wrap':'ellipsis','text-max-width':110}},
-          {selector:'node:selected',style:{'border-width':3,'border-color':'#fff'}},
-          {selector:'edge',style:{width:1.4,'line-color':'#667',label:'data(label)','font-size':8,color:'#889','target-arrow-shape':'triangle','target-arrow-color':'#667','curve-style':'bezier','text-rotation':'autorotate'}}]});
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches,ink=dark?'#e8eaf0':'#161922',bg=dark?'#171a21':'#ffffff';
+  cy=cytoscape({container:$('#cy'),elements:els,maxZoom:1.15,minZoom:.3,wheelSensitivity:.3,
+   layout:{name:'cose',animate:false,padding:50,nodeRepulsion:14000,idealEdgeLength:105,nodeOverlap:30,gravity:.5,numIter:2500,nodeDimensionsIncludeLabels:true,randomize:true},
+   style:[{selector:'node',style:{'background-color':n=>COL[n.data('kind')]||'#888',label:'data(label)',color:ink,'font-size':11,'text-valign':'bottom','text-margin-y':5,width:22,height:22,
+            'text-background-color':bg,'text-background-opacity':.85,'text-background-padding':2,'text-background-shape':'roundrectangle','text-wrap':'ellipsis','text-max-width':120}},
+          {selector:'node:selected',style:{'border-width':3,'border-color':ink}},
+          {selector:'edge',style:{width:1.4,'line-color':'#778','curve-style':'bezier','target-arrow-shape':'triangle','target-arrow-color':'#778',label:'data(label)','font-size':8,color:'#99a','text-rotation':'autorotate','text-background-color':bg,'text-background-opacity':.8,'text-background-padding':1}}]});
+  cy.fit(undefined,50);if(cy.zoom()>1.15)cy.zoom(1.15),cy.center();
   cy.on('tap','node',e=>nodeInfo(e.target.data()));
   $('#node').textContent='Click a node to see what it is. PRs and people link to GitHub.';
   const used=[...new Set(ev.nodes.map(n=>n.label))];
@@ -154,8 +163,15 @@ $('#f').onsubmit=async e=>{e.preventDefault();if(busy)return;const q=$('#q').val
 async function loadOverview(){const o=await j('/api/overview?tenant='+tenant);
   $('#kp').innerHTML=Object.entries(o.stats).map(([k,v])=>`<div class="kpi"><b>${v}</b>${k}s</div>`).join('');
   if(ovcy)ovcy.destroy();
-  ovcy=cytoscape({container:$('#ovg'),elements:[...o.nodes.map(n=>({data:{id:n.id,label:n.id,c:n.community,s:10+Math.sqrt(n.pagerank*4000)}})),...o.edges.map((e,i)=>({data:{id:'o'+i,source:e.source,target:e.target}}))],
-   layout:{name:'cose',animate:false,nodeRepulsion:6000},style:[{selector:'node',style:{width:'data(s)',height:'data(s)','background-color':n=>PAL[hi(n.data('c'))],label:'data(label)','font-size':8,color:css()}},{selector:'edge',style:{width:.6,'line-color':'#556',opacity:.5}}]});
+  const top=new Set([...o.nodes].sort((a,b)=>b.pagerank-a.pagerank).slice(0,22).map(n=>n.id));
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches,ink=dark?'#e8eaf0':'#161922',bg=dark?'#171a21':'#ffffff';
+  ovcy=cytoscape({container:$('#ovg'),minZoom:.3,maxZoom:2,wheelSensitivity:.3,
+   elements:[...o.nodes.map(n=>({data:{id:n.id,label:top.has(n.id)?n.id:'',home:n.community,s:12+Math.sqrt(n.pagerank*5000)}})),...o.edges.map((e,i)=>({data:{id:'o'+i,source:e.source,target:e.target}}))],
+   layout:{name:'cose',animate:false,padding:30,nodeRepulsion:30000,idealEdgeLength:70,gravity:.4,numIter:2500,nodeDimensionsIncludeLabels:true,randomize:true},
+   style:[{selector:'node',style:{width:'data(s)',height:'data(s)','background-color':n=>PAL[hi(n.data('home'))],label:'data(label)','font-size':10,color:ink,'text-valign':'bottom','text-margin-y':3,'text-background-color':bg,'text-background-opacity':.8,'text-background-padding':1}},
+          {selector:'edge',style:{width:.7,'line-color':'#8892a6',opacity:.35,'curve-style':'haystack'}}]});
+  ovcy.fit(undefined,30);
+  ovcy.on('mouseover','node',e=>{$('#ovinfo').textContent=e.target.id()+' ('+e.target.data('home')+')'});
   ovcy.on('tap','node',e=>{window.open('https://github.com/'+e.target.id(),'_blank','noopener')})}
 const heat=sh=>{const t=Math.min(1,Math.max(0,(sh-.2)/.6));return `hsl(${Math.round(210-t*210)} ${55+Math.round(t*20)}% ${42-Math.round(t*6)}%)`};
 async function loadRisk(){const [r,mp]=await Promise.all([j('/api/risk?tenant='+tenant),j('/api/riskmap?tenant='+tenant)]);const b=r.bus_factor.at_risk_modules;
