@@ -52,3 +52,11 @@ def test_stream_emits_real_events_then_final(monkeypatch):
     kinds = [__import__("json").loads(line)["e"] for line in r.text.strip().splitlines()]
     assert r.status_code == 200 and kinds == ["llm", "tool", "tool_done", "final"]
     api.HITS.clear()
+
+
+def test_expand_validates_kind_and_id_and_returns_neighbours():
+    assert c.get("/api/expand", params={"kind": "Evil", "id": "x"}).status_code == 422
+    assert c.get("/api/expand", params={"kind": "Person", "id": "a b; DROP"}).status_code == 422
+    r = c.get("/api/expand", params={"kind": "Person", "id": "gkorland"})
+    assert r.status_code == 200 and r.json()["nodes"] and r.json()["facts"]
+    assert all(n["id"] != "gkorland" for n in r.json()["nodes"])  # never echoes the node itself

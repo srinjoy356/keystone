@@ -83,7 +83,7 @@
         </div>
         <div id="mapView"><div id="map"><div class="skel" style="height:300px"></div></div>
           <div class="legend"><span>One person holds</span><span class="ramp" aria-hidden="true"></span><span>a little &rarr; most of the history</span></div></div>
-        <div id="netView" hidden><div id="netbox"></div><div class="label" id="netInfo" style="margin-top:10px">Connected contributors. Colour = home repo, size = reviewing authority (PageRank). Hover for a name, click to open GitHub.</div></div>
+        <div id="netView" hidden style="position:relative"><div class="gcard ncard" id="ncard" hidden></div><div id="netbox"></div><div class="label" id="netInfo" style="margin-top:10px">Colour = home repo, size = reviewing authority (PageRank). Hover to highlight, click for facts, double-click to pull in a person's top modules and recent PRs from FalkorDB. Ctrl+scroll to zoom.</div></div>
       </div>
       <div class="panel pad">
         <h3>Where it is most concentrated</h3>
@@ -112,7 +112,8 @@
         <div class="vpane" id="pane-trail"></div>
         <div class="vpane" id="pane-graph" hidden><div class="gbox" id="gbox"></div></div>
         <div class="vpane" id="pane-cypher" hidden><div id="trace"></div></div>
-        <div class="nodeinfo" id="nodeinfo">Click a node to see what it is. PRs and people link to GitHub.</div>
+        <div class="gcard" id="gcard" hidden></div>
+        <div class="nodeinfo" id="nodeinfo"></div>
         <div class="key" id="key"></div>
       </div>
     </div>

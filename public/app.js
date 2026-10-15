@@ -90,30 +90,65 @@ const shortNode = n => { const id = n.id, k = n.label;
   if (/^[^\s#]+\/[^\s#]+#\d+$/.test(id)) return id.split('/').pop();
   if (k === 'Module') return id.split(':').pop().split('/').slice(-2).join('/') || id;
   const t = n.name || id; return t.length > 30 ? t.slice(0, 30) + '...' : t };
-function nodeInfo(n) {
-  const id = n.id, k = n.label; let h = `<b>${esc(k)}</b> ${esc(n.title || n.name || id)}`;
-  const u = ghUrl(id); if (u) h += ` <a href="${u}" target="_blank" rel="noopener">${esc(id)}</a>`;
-  else if (k === 'Person') h += ` <a href="https://github.com/${esc(id)}" target="_blank" rel="noopener">github.com/${esc(id)}</a>`;
-  else if (k === 'Module') h += ` <span class="muted">${esc(id)}</span>`;
-  $('#nodeinfo').innerHTML = h
+/* ---------- interactive graph layer: hover highlight, detail card, live expand, zoom controls ---------- */
+const EXP = {};
+const HINT = 'Hover to highlight. Click a node for facts and a follow-up question. Double-click to pull in its neighbours from FalkorDB. Ctrl+scroll to zoom.';
+async function getExpand(d) { const k = d.label + '|' + d.id; if (!EXP[k]) EXP[k] = await j(`/api/expand?tenant=${tenant}&kind=${encodeURIComponent(d.label)}&id=${encodeURIComponent(d.id)}`); return EXP[k] }
+const askFor = d => d.label === 'Module' ? 'Who knows ' + modPath(d.id) + ' best?' : d.label === 'PR' ? 'Who should review ' + d.id + '?' : d.label === 'Decision' ? 'Why was this decided: ' + (d.title || d.name) + '?' : null;
+const openUrl = d => d.label === 'Person' ? 'https://github.com/' + d.id : ghUrl(d.id) ? ghUrl(d.id).replace('/pull/', d.label === 'Issue' ? '/issues/' : '/pull/') : null;
+function showCard(card, d, onExpand) {
+  card.hidden = false; const url = openUrl(d), q = askFor(d);
+  card.innerHTML = `<button class="x" aria-label="Close">&times;</button><div class="label" style="color:${ENT[d.label] || '#888'}">${esc(d.label)}</div><div class="ttl">${esc(shortNode(d))}</div><div class="small muted" style="overflow-wrap:anywhere">${esc(d.title || d.name || d.id)}</div><div class="facts small">Loading facts from FalkorDB...</div><div class="acts">${onExpand ? '<button class="btn sm" data-a="exp">Expand neighbours</button>' : ''}${q ? '<button class="btn sm dark" data-a="ask">Ask about this</button>' : ''}${url ? `<a class="btn sm" href="${url}" target="_blank" rel="noopener">Open on GitHub</a>` : ''}</div>`;
+  card.querySelector('.x').onclick = () => { card.hidden = true };
+  getExpand(d).then(r => { const f = card.querySelector('.facts'); if (f) f.innerHTML = r.facts.map(x => `<div>${esc(x)}</div>`).join('') + `<div class="muted" style="margin-top:4px">${r.nodes.length} neighbours in the graph</div>` }).catch(() => { const f = card.querySelector('.facts'); if (f) f.textContent = 'Facts unavailable right now.' });
+  const e = card.querySelector('[data-a=exp]'); if (e) e.onclick = () => onExpand(d);
+  const a = card.querySelector('[data-a=ask]'); if (a) a.onclick = () => askQuestion(q)
 }
-/* ---------- force graph (Graph tab) ---------- */
+const LAYOUT = (animate, fit) => ({ name: 'cose', animate: !!animate, animationDuration: 500, padding: 50, nodeRepulsion: 14000, idealEdgeLength: 105, nodeOverlap: 30, gravity: .5, numIter: animate ? 800 : 2500, nodeDimensionsIncludeLabels: true, randomize: !animate, fit: fit !== false });
+async function expandNode(cy, d) {
+  let r; try { r = await getExpand(d) } catch (e) { return }
+  const have = new Set(cy.nodes().map(n => n.id())), at = cy.getElementById(d.id), pos = at.length ? at.position() : { x: 0, y: 0 }, add = [];
+  r.nodes.forEach(n => { if (!have.has(n.id)) { have.add(n.id); add.push({ group: 'nodes', data: { id: n.id, label: shortNode(n), kind: n.label, name: n.name, title: n.title }, position: { x: pos.x + (Math.random() - .5) * 80, y: pos.y + (Math.random() - .5) * 80 } }) } });
+  r.edges.forEach(e => { if (!have.has(e.source) || !have.has(e.target)) return; const id = 'x|' + e.source + '|' + e.target + '|' + e.type; if (!cy.getElementById(id).length) add.push({ group: 'edges', data: { id, source: e.source, target: e.target, label: e.type.toLowerCase() } }) });
+  if (!add.length) return; cy.add(add); cy.layout(LAYOUT(true, false)).run(); setTimeout(() => cy.animate({ fit: { eles: cy.elements(), padding: 50 } }, { duration: 350 }), 600)
+}
+function wireCy(cy, el, card) {
+  cy.userZoomingEnabled(false); // plain scroll keeps scrolling the page; ctrl/cmd+scroll or the buttons zoom
+  el.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); cy.zoom({ level: Math.min(2.5, Math.max(.25, cy.zoom() * (e.deltaY < 0 ? 1.12 : .89))), renderedPosition: { x: e.offsetX, y: e.offsetY } }) } }, { passive: false });
+  const data = n => ({ id: n.id(), label: n.data('kind') || 'Person', name: n.data('name'), title: n.data('title') });
+  cy.on('mouseover', 'node', e => { el.style.cursor = 'pointer'; cy.elements().addClass('faded'); e.target.closedNeighborhood().removeClass('faded') });
+  cy.on('mouseout', 'node', () => { el.style.cursor = ''; cy.elements().removeClass('faded') });
+  cy.on('tap', 'node', e => { cy.nodes().unselect(); e.target.select(); showCard(card, data(e.target), d => expandNode(cy, d)) });
+  cy.on('dbltap', 'node', e => expandNode(cy, data(e.target)));
+  cy.on('tap', e => { if (e.target === cy) card.hidden = true });
+  const host = el.parentElement; host.querySelectorAll('.gtools').forEach(x => x.remove());
+  const t = document.createElement('div'); t.className = 'gtools'; t.innerHTML = '<button title="Zoom in">+</button><button title="Zoom out">&minus;</button><button title="Fit to view">Fit</button><button title="Re-run the layout">&#8635;</button>'; host.append(t);
+  const mid = () => ({ x: el.clientWidth / 2, y: el.clientHeight / 2 }), [zi, zo, fit, rl] = t.children;
+  zi.onclick = () => cy.zoom({ level: Math.min(2.5, cy.zoom() * 1.25), renderedPosition: mid() }); zo.onclick = () => cy.zoom({ level: Math.max(.25, cy.zoom() * .8), renderedPosition: mid() });
+  fit.onclick = () => cy.animate({ fit: { eles: cy.elements(), padding: 50 } }, { duration: 250 }); rl.onclick = () => { cy.layout(LAYOUT(true)).run() }
+}
+const CY_STYLE = bgNode => [
+  { selector: 'node', style: { 'background-color': bgNode, label: 'data(label)', color: '#14211e', 'font-size': 11, 'font-family': 'Inter', 'text-valign': 'bottom', 'text-margin-y': 5, width: 20, height: 20, 'text-background-color': '#f1ede3', 'text-background-opacity': .9, 'text-background-padding': 2, 'text-wrap': 'ellipsis', 'text-max-width': 110, 'transition-property': 'opacity', 'transition-duration': '0.15s' } },
+  { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#14211e' } },
+  { selector: 'edge', style: { width: 1.3, 'line-color': '#a39c86', 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'target-arrow-color': '#a39c86', label: 'data(label)', 'font-size': 8, 'font-family': 'JetBrains Mono', color: '#5a645f', 'text-rotation': 'autorotate', 'text-background-color': '#f1ede3', 'text-background-opacity': .8, 'text-background-padding': 1 } },
+  { selector: '.faded', style: { opacity: .14 } }];
 function drawForce(el, ev) {
   if (cyEv) { cyEv.destroy(); cyEv = null }
   if (!ev || !ev.nodes.length) { el.innerHTML = '<div class="label" style="padding:28px">No graph for this answer.</div>'; return }
   el.innerHTML = ''; const ids = new Set(ev.nodes.map(n => n.id));
   const els = [...ev.nodes.map(n => ({ data: { id: n.id, label: shortNode(n), kind: n.label, name: n.name, title: n.title } })), ...ev.edges.filter(e => ids.has(e.source) && ids.has(e.target)).map((e, i) => ({ data: { id: 'e' + i, source: e.source, target: e.target, label: e.type.toLowerCase() } }))];
-  cyEv = cytoscape({ container: el, elements: els, maxZoom: 1.15, minZoom: .3, wheelSensitivity: .3,
-    layout: { name: 'cose', animate: false, padding: 50, nodeRepulsion: 14000, idealEdgeLength: 105, nodeOverlap: 30, gravity: .5, numIter: 2500, nodeDimensionsIncludeLabels: true, randomize: true },
-    style: [{ selector: 'node', style: { 'background-color': n => ENT[n.data('kind')] || '#888', label: 'data(label)', color: '#14211e', 'font-size': 11, 'font-family': 'Inter', 'text-valign': 'bottom', 'text-margin-y': 5, width: 20, height: 20, 'text-background-color': '#f1ede3', 'text-background-opacity': .9, 'text-background-padding': 2, 'text-wrap': 'ellipsis', 'text-max-width': 110 } },
-      { selector: 'edge', style: { width: 1.3, 'line-color': '#a39c86', 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'target-arrow-color': '#a39c86', label: 'data(label)', 'font-size': 8, 'font-family': 'JetBrains Mono', color: '#5a645f', 'text-rotation': 'autorotate', 'text-background-color': '#f1ede3', 'text-background-opacity': .8, 'text-background-padding': 1 } }] });
+  cyEv = cytoscape({ container: el, elements: els, maxZoom: 2.5, minZoom: .25, layout: LAYOUT(false), style: CY_STYLE(n => ENT[n.data('kind')] || '#888') });
   cyEv.fit(undefined, 50); if (cyEv.zoom() > 1.15) { cyEv.zoom(1.15); cyEv.center() }
-  cyEv.on('tap', 'node', e => nodeInfo({ id: e.target.id(), label: e.target.data('kind'), name: e.target.data('name'), title: e.target.data('title') }))
+  wireCy(cyEv, el, $('#gcard'))
+}
+function exploreInGraph(d) {
+  $$('.vtabs button')[1].click();
+  setTimeout(() => { if (cyEv) { const n = cyEv.getElementById(d.id); if (n.length) { n.select(); cyEv.animate({ center: { eles: n } }, { duration: 250 }) } expandNode(cyEv, d) } }, 350)
 }
 function showEvidence(ev, trace) {
-  lastEv = ev; drawTrail($('#pane-trail'), ev, { onNode: nodeInfo });
+  lastEv = ev; drawTrail($('#pane-trail'), ev, { onNode: n => { $$('#pane-trail .tn').forEach(c => c.classList.toggle('hot', c.dataset.id === n.id)); showCard($('#gcard'), n, exploreInGraph) } });
   if (!$('#pane-graph').hidden) drawForce($('#gbox'), ev);
-  $('#nodeinfo').textContent = 'Click a node to see what it is. PRs and people link to GitHub.';
+  $('#gcard').hidden = true; $('#nodeinfo').textContent = HINT;
   const used = [...new Set((ev.nodes || []).map(n => n.label))];
   $('#key').innerHTML = used.map(k => `<span><i style="background:${ENT[k] || '#888'}"></i>${esc(k)}</span>`).join('') + '<span>Thicker line = larger contribution to the score</span>';
   $('#trace').innerHTML = trace && trace.length ? trace.map(t => `<details class="q" open><summary><b>${esc(t.tool)}</b> <span class="muted">${esc(JSON.stringify(t.args))} &middot; ${t.ms} ms &middot; ${t.queries.length} quer${t.queries.length === 1 ? 'y' : 'ies'}</span></summary>` + t.queries.map(q => `<pre>${esc(q.cypher)}\n-- ${q.rows} rows, ${q.ms} ms</pre>`).join('') + '</details>').join('') : '<div class="label" style="padding:28px">No tools were needed for this answer.</div>'
@@ -244,18 +279,19 @@ async function loadNetwork() {
   const o = await getJSON('/api/overview?tenant=' + tenant, tsnap('overview'));
   if (cyNet) cyNet.destroy();
   const top = new Set([...o.nodes].sort((a, b) => b.pagerank - a.pagerank).slice(0, 22).map(n => n.id));
-  cyNet = cytoscape({ container: $('#netbox'), minZoom: .3, maxZoom: 2, wheelSensitivity: .3,
-    elements: [...o.nodes.map(n => ({ data: { id: n.id, label: top.has(n.id) ? n.id : '', home: n.community, s: 12 + Math.sqrt(n.pagerank * 5000) } })), ...o.edges.map((e, i) => ({ data: { id: 'o' + i, source: e.source, target: e.target } }))],
+  cyNet = cytoscape({ container: $('#netbox'), minZoom: .25, maxZoom: 2.5,
+    elements: [...o.nodes.map(n => ({ data: { id: n.id, label: top.has(n.id) ? n.id : '', kind: 'Person', name: n.id, title: 'Home repo: ' + n.community, home: n.community, s: 12 + Math.sqrt(n.pagerank * 5000) } })), ...o.edges.map((e, i) => ({ data: { id: 'o' + i, source: e.source, target: e.target } }))],
     layout: { name: 'cose', animate: false, padding: 30, nodeRepulsion: 30000, idealEdgeLength: 70, gravity: .4, numIter: 2500, nodeDimensionsIncludeLabels: true, randomize: true },
-    style: [{ selector: 'node', style: { width: 'data(s)', height: 'data(s)', 'background-color': n => PAL[homeIdx(n.data('home'))], label: 'data(label)', 'font-size': 10, 'font-family': 'Inter', color: '#14211e', 'text-valign': 'bottom', 'text-margin-y': 3, 'text-background-color': '#e8e2d3', 'text-background-opacity': .85, 'text-background-padding': 1 } },
-      { selector: 'edge', style: { width: .7, 'line-color': '#8a8470', opacity: .4, 'curve-style': 'haystack' } }] });
-  cyNet.fit(undefined, 30);
-  cyNet.on('mouseover', 'node', e => { $('#netInfo').textContent = e.target.id() + ' (home: ' + e.target.data('home') + ')' });
-  cyNet.on('tap', 'node', e => window.open('https://github.com/' + e.target.id(), '_blank', 'noopener'))
+    style: [{ selector: 'node', style: { width: 'data(s)', height: 'data(s)', 'background-color': n => n.data('home') ? PAL[homeIdx(n.data('home'))] : (ENT[n.data('kind')] || '#888'), label: 'data(label)', 'font-size': 10, 'font-family': 'Inter', color: '#14211e', 'text-valign': 'bottom', 'text-margin-y': 3, 'text-background-color': '#e8e2d3', 'text-background-opacity': .85, 'text-background-padding': 1, 'transition-property': 'opacity', 'transition-duration': '0.15s' } },
+      { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#14211e' } },
+      { selector: 'edge', style: { width: .7, 'line-color': '#8a8470', opacity: .4, 'curve-style': 'haystack' } },
+      { selector: '.faded', style: { opacity: .1 } }] });
+  cyNet.fit(undefined, 30); wireCy(cyNet, $('#netbox'), $('#ncard'));
+  cyNet.on('mouseover', 'node', e => { $('#netInfo').textContent = e.target.id() + ' (home: ' + e.target.data('home') + ')' })
 }
 $$('.seg button').forEach(b => b.onclick = () => {
   $$('.seg button').forEach(x => x.classList.toggle('on', x === b)); const net = b.dataset.v === 'net';
-  $('#mapView').hidden = net; $('#netView').hidden = !net; $('#mapHint').textContent = net ? 'Hover for a name, click to open GitHub' : 'Click a tile to ask Keystone';
+  $('#mapView').hidden = net; $('#netView').hidden = !net; $('#mapHint').textContent = net ? 'Click a person, double-click to expand' : 'Click a tile to ask Keystone';
   if (net) loadNetwork().catch(() => { })
 });
 

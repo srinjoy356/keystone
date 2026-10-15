@@ -197,3 +197,19 @@ footer .wrap{display:flex;gap:24px;flex-wrap:wrap;justify-content:space-between}
   .bars .row{grid-template-columns:120px 1fr 40px}
 }
 @media (max-width:560px){.wrap{padding:0 16px}.brand small{display:none}.askcard .out{min-height:200px}.vpane{min-height:360px}}
+
+/* interactive graph layer */
+.viewcol{position:relative}
+.gcard{position:absolute;z-index:6;right:12px;top:54px;width:280px;max-width:calc(100% - 24px);background:var(--panel);border:1px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:12px 14px}
+.gcard.ncard{top:8px;right:8px}
+.gcard .x{position:absolute;right:6px;top:2px;border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--muted)}
+.gcard .ttl{font:400 22px/1.1 var(--serif);margin:2px 0 4px;overflow-wrap:anywhere}
+.gcard .facts{margin:8px 0;padding:8px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.gcard .acts{display:flex;gap:6px;flex-wrap:wrap}
+.gtools{position:absolute;left:10px;top:10px;z-index:5;display:flex;flex-direction:column;border:1px solid var(--ink);background:var(--panel)}
+.gtools button{width:32px;height:30px;border:0;border-bottom:1px solid var(--line);background:transparent;font:600 13px var(--mono);cursor:pointer;color:var(--ink)}
+.gtools button:last-child{border-bottom:0}.gtools button:hover{background:var(--ink);color:var(--paper)}
+#pane-graph{position:relative}#gbox{position:relative}
+#netbox{position:relative}
+.nodeinfo{font:11px var(--mono);color:var(--muted)}
+.tn.hot{box-shadow:0 0 0 2px var(--accent)}

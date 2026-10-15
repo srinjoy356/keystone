@@ -278,3 +278,58 @@ def forget_unavailable(tenant: str, person: str, user: str | None = None):
 
 TOOLS = {"remember_unavailable": remember_unavailable, "forget_unavailable": forget_unavailable, "recall_memory": recall_memory, "who_knows": who_knows, "suggest_reviewers": suggest_reviewers, "bus_factor": bus_factor, "bridges": bridges,
          "connection": connection, "why_decision": why_decision}
+
+
+def expand(tenant: str, kind: str, nid: str):
+    """Neighbourhood of one node for the interactive graphs: facts plus up to ~16 neighbours. Read-only, parameterised, capped."""
+    g, ev, now, facts = kb(tenant), _ev(), int(time.time()), []
+    p = {"id": nid}
+    if kind == "Person":
+        r = ro(g, "MATCH (x:Person {login:$id}) RETURN x.acts, x.home, x.pagerank, x.bridge, x.lastActive", p)
+        if r:
+            acts, home, pr_, br, last = r[0]
+            facts += [f"{acts or 0} PRs authored, reviewed or commented on", f"home repo: {home or 'n/a'}", f"PageRank {(pr_ or 0):.4f}, betweenness {(br or 0):.0f}"] + ([f"last active {ago_days(now, last)}"] if last else [])
+        for mid, n in ro(g, "MATCH (:Person {login:$id})-[k:KNOWS]->(m:Module) RETURN m.id, k.n ORDER BY k.n DESC LIMIT 6", p):
+            _n(ev, mid, "Module", mid); ev["edges"].append({"source": nid, "target": mid, "type": "KNOWS", "w": n})
+        for pid, title, role in ro(g, "MATCH (:Person {login:$id})-[r:AUTHORED|REVIEWED]->(pr:PR) RETURN pr.id, pr.title, type(r) ORDER BY pr.createdAt DESC LIMIT 5", p):
+            _n(ev, pid, "PR", pid, title=title); ev["edges"].append({"source": nid, "target": pid, "type": role})
+        for q, n in ro(g, "MATCH (:Person {login:$id})-[c:COLLAB]-(q:Person) RETURN q.login, c.n ORDER BY c.n DESC LIMIT 4", p):
+            _n(ev, q, "Person", q); ev["edges"].append({"source": nid, "target": q, "type": "COLLAB", "w": n})
+    elif kind == "Module":
+        files = ro(g, "MATCH (:Module {id:$id})<-[:IN]-(f:File) RETURN count(f)", p)
+        facts += [f"{files[0][0] if files else 0} files directly in this directory"]
+        for login, n in ro(g, "MATCH (q:Person)-[k:KNOWS]->(:Module {id:$id}) RETURN q.login, k.n ORDER BY k.n DESC LIMIT 6", p):
+            _n(ev, login, "Person", login); ev["edges"].append({"source": login, "target": nid, "type": "KNOWS", "w": n})
+        for pid, title, _ in ro(g, "MATCH (:Module {id:$id})<-[:IN]-(:File)<-[:TOUCHES]-(pr:PR) RETURN DISTINCT pr.id, pr.title, pr.createdAt ORDER BY pr.createdAt DESC LIMIT 5", p):
+            _n(ev, pid, "PR", pid, title=title); ev["edges"].append({"source": pid, "target": nid, "type": "TOUCHES"})
+        for pm in ro(g, "MATCH (:Module {id:$id})-[:PARENT]->(m:Module) RETURN m.id LIMIT 1", p):
+            _n(ev, pm[0], "Module", pm[0]); ev["edges"].append({"source": nid, "target": pm[0], "type": "PARENT"})
+    elif kind in ("PR", "Issue"):
+        label = "PR" if kind == "PR" else "Issue"
+        r = ro(g, f"MATCH (x:{label} {{id:$id}}) RETURN x.state, x.createdAt, x.changedFiles, x.adds, x.dels", p)
+        if r:
+            st, ts_, cf, ad, de = r[0]
+            facts += [f"state: {st}", f"opened {time.strftime('%Y-%m-%d', time.gmtime(ts_))}" if ts_ else "opened: n/a"] + ([f"{cf} files, +{ad} / -{de}"] if cf is not None else [])
+        for login, role in ro(g, f"MATCH (q:Person)-[r:AUTHORED|REVIEWED|COMMENTED|OPENED]->(:{label} {{id:$id}}) RETURN q.login, type(r) LIMIT 8", p):
+            _n(ev, login, "Person", login); ev["edges"].append({"source": login, "target": nid, "type": role})
+        for did, text in ro(g, f"MATCH (d:Decision)-[:DECIDED_IN]->(:{label} {{id:$id}}) RETURN d.id, d.text LIMIT 4", p):
+            _n(ev, did, "Decision", text[:60], title=text); ev["edges"].append({"source": did, "target": nid, "type": "DECIDED_IN"})
+        if kind == "PR":
+            for mid, c in ro(g, "MATCH (:PR {id:$id})-[:TOUCHES]->(:File)-[:IN]->(m:Module) RETURN m.id, count(*) AS c ORDER BY c DESC LIMIT 4", p):
+                _n(ev, mid, "Module", mid); ev["edges"].append({"source": nid, "target": mid, "type": "TOUCHES", "w": c})
+    elif kind == "Decision":
+        r = ro(g, "MATCH (d:Decision {id:$id}) RETURN d.text, d.why, d.quote, d.ts", p)
+        if r:
+            text, why, quote, ts_ = r[0]
+            facts += [f"decided {time.strftime('%Y-%m-%d', time.gmtime(ts_))}", f"why: {why}" if why else "", f"quote: \"{quote}\""]
+        for sid, title, lab in ro(g, "MATCH (:Decision {id:$id})-[:DECIDED_IN]->(s) RETURN s.id, s.title, labels(s)[0]", p):
+            _n(ev, sid, lab, sid, title=title); ev["edges"].append({"source": nid, "target": sid, "type": "DECIDED_IN"})
+        for login in ro(g, "MATCH (q:Person)-[:STATED]->(:Decision {id:$id}) RETURN q.login", p):
+            _n(ev, login[0], "Person", login[0]); ev["edges"].append({"source": login[0], "target": nid, "type": "STATED"})
+    ev["nodes"].pop(nid, None)  # the node itself is already on screen
+    return {"id": nid, "kind": kind, "facts": [f for f in facts if f], "nodes": list(ev["nodes"].values()), "edges": ev["edges"]}
+
+
+def ago_days(now: int, ts: int) -> str:
+    d = max(0, (now - ts) // DAY)
+    return "today" if d < 1 else f"{d} days ago" if d < 60 else f"{round(d / 30)} months ago"

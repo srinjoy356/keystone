@@ -209,6 +209,14 @@ def overview(tenant: str = "falkordb"):
             "edges": [{"source": a, "target": b, "n": n} for a, b, n in links if a in ids and b in ids]}
 
 
+@app.get("/api/expand")
+def expand(request: Request, tenant: str = "falkordb", kind: str = Query(pattern=r"^(Person|PR|Issue|Module|Decision)$"),
+           id: str = Query(pattern=r"^[A-Za-z0-9_.:/#@-]{1,200}$")):
+    """Neighbours of one node for the interactive graphs (read-only, capped)."""
+    guard(request); known_tenant(tenant)
+    return tools.expand(tenant, kind, id)
+
+
 @app.get("/api/ticker")
 def ticker(tenant: str = "falkordb"):
     """Latest verified decisions, for the live strip under the hero."""
