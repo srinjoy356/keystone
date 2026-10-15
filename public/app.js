@@ -157,10 +157,13 @@ function feedbackButtons(m, r) {
       try { await post('/api/feedback', { pr: sr.pr, person: sg.person, verdict: b.dataset.v, reason, scope: sr.scope }); d.textContent = sg.person + ': saved to your memory graph.'; loadMemory().catch(() => { }) } catch (er) { d.textContent = er.message } }); return d }))
 }
 /* console (section 02) */
+/* the right-hand panel always shows ONE answer's evidence: mark it, and let a click on any earlier answer switch to it */
+function setCurrent(m) { $$('#chat .msg').forEach(x => x.classList.toggle('cur', x === m)) }
+$('#chat').addEventListener('click', e => { const m = e.target.closest('.msg'); if (m && m._r && !e.target.closest('a,button,input') && !m.classList.contains('cur')) { setCurrent(m); showEvidence(m._r.evidence, m._r.trace) } });
 function pushConsole(q, r, label, keepTop) {
   const m = document.createElement('div'); m.className = 'msg';
   m.innerHTML = (label ? `<div class="label">${esc(label)}</div>` : '') + `<div class="qq">${esc(q)}</div><div class="aa">${fmt(r.answer)}</div>` + tagsHtml(r);
-  $('#chat').append(m); showEvidence(r.evidence, r.trace); feedbackButtons(m, r); $('#chat').scrollTop = keepTop ? 0 : 1e9; return m
+  m._r = r; $('#chat').append(m); setCurrent(m); showEvidence(r.evidence, r.trace); feedbackButtons(m, r); $('#chat').scrollTop = keepTop ? 0 : Math.max(0, m.offsetTop - 12); return m
 }
 async function askConsole(q) {
   if (busy) return; busy = true; $('#askBtn').disabled = true; $('#hbtn').disabled = true;
