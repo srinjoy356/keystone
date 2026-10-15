@@ -1,0 +1,11 @@
+.venv
+data/raw
+data/raw_issues
+data/decisions
+data/*.log
+data/*.err
+.env
+important_.txt
+.git
+__pycache__
+.pytest_cache

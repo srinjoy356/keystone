@@ -12,3 +12,4 @@ data/*.log
 data/eval_signals.json
 data/decisions/
 data/raw_issues/
+data/eval_emb.json

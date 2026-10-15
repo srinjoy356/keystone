@@ -1,0 +1,11 @@
+# docker compose up --build   ->  http://localhost:8000 (app)   http://localhost:3000 (FalkorDB Browser)
+services:
+  keystone:
+    build: .
+    ports: ["8000:8000", "3000:3000"]
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in your shell or .env}
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_EMBED_MODEL: text-embedding-3-small
+      FALKORDB_TARGET: local
+      DAILY_ASK_CAP: "400"

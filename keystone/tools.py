@@ -160,6 +160,8 @@ def bus_factor(tenant: str, repo: str | None = None, limit: int = 6):
         top = ps[0]
         backups = [p for p, n, last in ps[1:] if n / total >= 0.15 and now - last < 120 * DAY]
         share = top[1] / total
+        if share < 0.4:  # only genuine concentration counts as risk
+            continue
         risk.append({"module": m, "top_expert": top[0], "share": round(share, 2), "active_backups": len(backups),
                      "recent_prs": total, "top_expert_last_active_days": (now - top[2]) // DAY,
                      "score": share * math.log(1 + total) * (1.5 if not backups else 1)})
