@@ -71,9 +71,9 @@ def who_knows(tenant: str, target: str):
         for login, s, n, last, comm in rows:
             _n(ev, login, "Person", login, community=comm)
             out.append({"person": login, "share": round(s / tot, 2), "related_prs": n, "last_active_days": (now - last) // DAY})
-            for pid, _, _ in prs:
-                if ro(g, "MATCH (:Person {login:$u})-[:AUTHORED|REVIEWED]->(:PR {id:$p}) RETURN 1 LIMIT 1", {"u": login, "p": pid}):
-                    ev["edges"].append({"source": login, "target": pid, "type": "WORKED_ON"})
+        for u, pid in ro(g, "MATCH (p:Person)-[:AUTHORED|REVIEWED]->(pr:PR) WHERE p.login IN $us AND pr.id IN $ps RETURN DISTINCT p.login, pr.id",
+                         {"us": [o["person"] for o in out], "ps": [x[0] for x in prs]}):
+            ev["edges"].append({"source": u, "target": pid, "type": "WORKED_ON"})
         return _out({"topic": target, "route": "vector recall over PRs, then graph expansion to authors and reviewers",
                      "closest_prs": [{"pr": a, "title": b} for a, b, _ in prs], "experts": out}, ev, "WHO_KNOWS_TOPIC")
     mid = mods[0][0]

@@ -7,7 +7,7 @@ Keystone turns the public history of a codebase (pull requests, reviews, issues,
 Built for **Graph Hacks: Context for AI Agents** (WeMakeDevs x FalkorDB), Oct 15-18 2026.
 Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordination, 3 Company Brain**.
 
-* Live demo: _(filled in at deploy time)_
+* Live demo: https://keystone-graph.vercel.app (FalkorDB Cloud + Vercel)
 * Demo video: _(filled in at submission)_
 * Blog post: _(filled in at submission)_
 

@@ -1,0 +1,17 @@
+.venv
+data/raw
+data/raw_issues
+data/decisions
+data/eval_emb.json
+data/eval_signals.json
+data/*.log
+data/*.err
+seed
+tests
+docs
+.git
+important_.txt
+.env
+Dockerfile
+docker-compose.yml
+__pycache__
