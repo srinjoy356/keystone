@@ -118,13 +118,25 @@ Other checks (`python -m keystone.qa_eval`):
 
 `keystone/agent.py` is a bounded tool-calling loop (OpenAI `gpt-4o-mini`). Design choices worth knowing:
 
-* **The model never writes Cypher and never sees the database.** It chooses among seven fixed tools and explains their output. User identity for memory comes from the session, never from model arguments.
+* **The model never writes Cypher and never sees the database.** It chooses among nine fixed tools and explains their output. User identity for memory comes from the session, never from model arguments.
 * **Every answer is traceable.** The API returns the tool calls, the exact Cypher executed with row counts and timings, and the evidence subgraph; the UI shows all three.
 * **Decisions are verified, not trusted.** The LLM proposes decisions with a quote. Code keeps a decision only if (1) the quote is a verbatim substring of the cited message and (2) a second check confirms the quote states the decision rather than asking about it. Roughly three in ten proposals are rejected.
 * **Memory changes behaviour.** Rejecting a suggested reviewer creates a scoped, expiring `AVOID` rule in your own graph; the next suggestion for that subtree skips them and the agent tells you why.
 * **Knowledge risk is about modules, not people.** Only public GitHub handles are used; no emails or private data.
 
+## MCP server
+
+`python -m keystone.mcp_server` exposes the read-only graph tools (`who_knows`, `suggest_reviewers`, `bus_factor`, `bridges`, `connection`, `why_decision`) over MCP, so Claude Desktop, Cursor or any MCP client can pick among them. `tests/mcp_client_check.py` starts it over stdio and calls it like a real client.
+
+## Concurrency
+
+`tests/bench.py` drives the real tools (no LLM) from concurrent threads against local FalkorDB: with 16 threads, 400 calls, **zero errors, about 190 calls/s**; reviewer suggestion p50 178 ms / p95 343 ms, topic expertise p50 11 ms, shortest path p50 4 ms (the risk scan is cached for 5 minutes). Numbers are for one laptop; treat them as order of magnitude.
+
 ## Run it
+
+**Fastest (everything preloaded):** `OPENAI_API_KEY=... docker compose up --build`, then open http://localhost:8000 (the FalkorDB Browser is on :3000 so you can inspect the graph yourself).
+
+**From source:**
 
 Requirements: Docker, Python 3.12, an OpenAI key, a GitHub token (read-only, public repos).
 
