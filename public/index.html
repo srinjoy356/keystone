@@ -151,7 +151,7 @@ function tags(r){const q=r.trace.reduce((a,t)=>a+t.queries.length,0),ms=r.trace.
 $('#f').onsubmit=async e=>{e.preventDefault();if(busy)return;const q=$('#q').value.trim();if(!q)return;$('#q').value='';busy=true;$('#ask').disabled=true;
   const m=document.createElement('div');m.className='msg';m.innerHTML=`<div class="q">${esc(q)}</div><div class="a sub dots">Querying the graph</div>`;$('#chat').append(m);$('#chat').scrollTop=1e9;
   try{const r=await post('/api/ask',{question:q,history:HIST.slice(-3)});HIST.push({q:q.slice(0,400),a:(r.answer||'').slice(0,1200)});
-    const a=m.querySelector('.a');a.className='a';a.innerHTML=link(esc(r.answer));m.insertAdjacentHTML('beforeend',tags(r));drawEvidence(r.evidence);drawTrace(r.trace);
+    const a=m.querySelector('.a');a.className='a';a.innerHTML=link(esc(r.answer.replace(/\*\*|__/g,'')));m.insertAdjacentHTML('beforeend',tags(r));drawEvidence(r.evidence);drawTrace(r.trace);
     const sr=r.structured&&r.structured.suggest_reviewers;
     if(sr&&sr.suggestions)m.append(...sr.suggestions.map(sg=>{const d=document.createElement('div');d.className='sub';d.style.marginTop='6px';
       d.innerHTML=`${esc(sg.person)}: <button class="chip" data-v="accept">good pick</button> <button class="chip" data-v="reject">skip them</button>`;
