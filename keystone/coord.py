@@ -65,19 +65,34 @@ def decide(tenant: str, task_id: str, approve: bool, who: str):
     return execute(tenant, task_id, json.loads(rows[0][0])) if approve else {"status": "rejected"}
 
 
+def _gh_cap_ok(limit: int = 10) -> bool:
+    """Daily cap on real GitHub writes, kept in FalkorDB so it holds across serverless instances."""
+    n = db().select_graph("ops_meta").query("MERGE (m:Meter {kind:'gh', day:$d}) SET m.n = coalesce(m.n, 0) + 1 RETURN m.n",
+                                            {"d": time.strftime("%Y-%m-%d")}).result_set[0][0]
+    return n <= limit
+
+
 def execute(tenant: str, task_id: str, proposal: dict):
-    """Request the suggested reviewers. Real write only if a write token is set AND the repo is allowlisted; otherwise dry run."""
+    """Record the approved recommendation as a real issue in OUR sandbox repo (KEYSTONE_SANDBOX_REPO) when a write token is set.
+    It never writes to the upstream repo the task is about. Without a token or past the daily cap it is a dry run."""
     repo, num = task_id.split("#")
-    reviewers = [s["person"] for s in proposal.get("suggestions", [])][:2]
-    allow = {r.strip() for r in os.environ.get("KEYSTONE_WRITE_REPOS", "").split(",") if r.strip()}
-    token, live = os.environ.get("GITHUB_WRITE_TOKEN"), False
-    payload = {"method": "POST", "url": f"https://api.github.com/repos/{repo}/pulls/{num}/requested_reviewers", "json": {"reviewers": reviewers}}
-    status = "dry_run"
-    if token and repo in allow:
-        r = httpx.post(payload["url"], json=payload["json"], headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    people = proposal.get("suggestions", [])[:3]
+    lines = [f"- **{x['person']}** (score {x['score']}): " + "; ".join(f"{b['role'].lower()} [{b['pr']}](https://github.com/{b['pr'].split('#')[0]}/pull/{b['pr'].split('#')[1]})" for b in x.get("because", [])) for x in people]
+    body = (f"Keystone recommends these reviewers for [{task_id}](https://github.com/{repo}/pull/{num}) "
+            f"(\"{proposal.get('title', '')}\"):\n\n" + "\n".join(lines) +
+            "\n\nBased on authored/reviewed PRs touching the same files before this PR was opened. Approved by a human in the Keystone demo; "
+            "this issue lives in a sandbox repo so the upstream project is never touched.")
+    payload = {"method": "POST", "url": f"https://api.github.com/repos/{os.environ.get('KEYSTONE_SANDBOX_REPO', '<owner>/<sandbox>')}/issues",
+               "json": {"title": f"Reviewer request for {task_id}", "body": body}}
+    token, sandbox = os.environ.get("GITHUB_WRITE_TOKEN"), os.environ.get("KEYSTONE_SANDBOX_REPO")
+    status, live = "dry_run", False
+    if token and sandbox and _gh_cap_ok():
+        r = httpx.post(payload["url"], json=payload["json"], headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}, timeout=20)
         status, live = ("executed" if r.status_code < 300 else f"failed_{r.status_code}"), True
+        if r.status_code < 300:
+            payload["created"] = r.json().get("html_url")
     og(tenant).query("MATCH (t:Task {id:$id}) SET t.status='done', t.action=$a, t.actionStatus=$s",
-                     {"id": task_id, "a": json.dumps(payload), "s": status})
+                     {"id": task_id, "a": json.dumps(payload), "s": status + (" " + payload["created"] if payload.get("created") else "")})
     return {"status": status, "live": live, "request": payload}
 
 

@@ -155,7 +155,7 @@ Tests: `PYTHONPATH=. pytest -q tests` (unit tests, tenant-id validation, and a c
 ## What it deliberately does not do
 
 * It does not judge people. Risk is computed per module; names appear only as the public GitHub handle holding the history.
-* It does not claim live GitHub writes: the executor is a dry run unless `GITHUB_WRITE_TOKEN` is set **and** the repo is in `KEYSTONE_WRITE_REPOS`.
+* The action step never writes to the projects it analyses. On approval it opens an issue in our own sandbox repo (`KEYSTONE_SANDBOX_REPO`, written with a fine-grained token limited to that repo, max 10 per day); without a token it is a dry run that shows the exact request.
 * Free-tier FalkorDB Cloud connects without TLS; only public data is stored there.
 * Reviewer prediction measures who *did* review, which is not always who *should* have. It is a strong proxy, not ground truth.
 
