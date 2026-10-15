@@ -38,8 +38,8 @@ OBS settings: Settings > Video: base and output 1920x1080, 30 fps. Settings > Ou
 |---|---|---|
 | 0:00 - 0:15 | **Face, full frame** | Who you are, the problem, the promise |
 | 0:15 - 0:40 | Screen: hero, then the knowledge map | The problem on real data (Track 3) |
-| 0:40 - 1:20 | Screen: Ask section | An answer with evidence (Track 1) |
-| 1:20 - 1:50 | Screen: Remember | Memory that changes answers (Track 2) |
+| 0:40 - 1:25 | Screen: Ask section, including exploring the graph | An answer with evidence you can explore (Track 1) |
+| 1:25 - 1:50 | Screen: Remember | Memory that changes answers (Track 2) |
 | 1:50 - 2:15 | Screen: Act | Two agents and a real action (Tracks 1 and 2) |
 | 2:15 - 2:40 | Screen: Trust | Proof it works |
 | 2:40 - 2:55 | Screen: How it works | FalkorDB is central |
@@ -59,10 +59,11 @@ If you are not comfortable doing it in one take, record three pieces (face intro
 **0:40 Ask (scroll to section 02, click the starter "Who should review FalkorDB/GraphRAG-SDK#328?")**
 While it runs: "Watch the steps. The agent chooses one of nine fixed graph tools, runs Cypher on FalkorDB, then writes the answer. It never writes a query and never sees the database."
 When the answer and trail appear: "Here is why it answered this way. This pull request touched fifty files. The graph walked to earlier pull requests that touched the same files, and to the people on them. A thicker line means a bigger contribution."
-*Click the Cypher tab:* "And this is the exact Cypher that ran, read-only. That is Track 1: an agent acting on connected data, with its reasoning visible."
-(Optional, 5 seconds: "The same tools are available over MCP.")
+*Explore the graph (about 12 seconds). Click the card for the first person in the trail (for example Naseem77):* "And it is not a picture. Click a person and I get facts straight from FalkorDB." *Click "Expand neighbours" on the card; the view switches to the Graph tab and animates in more nodes. Hover one node so the rest fade:* "Expanding runs a live read-only query and pulls in their top modules and recent pull requests. Hover highlights the connections."
+*Click the Cypher tab:* "And this is the exact Cypher that ran, read-only. That is Track 1: an agent acting on connected data, with its reasoning visible and explorable."
+(Optional, 5 seconds, only if you are under time: "The same tools are available over MCP.")
 
-**1:20 Remember (scroll to section 03)**
+**1:25 Remember (scroll to section 03)**
 *Click Ask, then Mark on leave, then Ask again.*
 "Memory lives in the graph. Every user gets their own FalkorDB graph. I tell it the top reviewer is on leave; it writes a rule. Same question, different answer, and it tells me why. That is episodic, semantic and procedural memory, isolated from every other user. That is Track 2."
 
@@ -88,6 +89,8 @@ When the answer and trail appear: "Here is why it answered this way. This pull r
 - If an answer is slow, keep talking about what the steps list shows ("it is choosing a tool, now it is running Cypher").
 - If something fails, stop, take a breath, redo that section. Do not apologise on camera; cut it.
 - Do two or three takes. The second is usually best.
+- **Graph exploration tips:** the detail card opens at the top right of the right-hand panel. "Expand neighbours" needs the live backend, so rehearse it once; it takes about a second. Move the mouse slowly onto one node so the fade-out effect is visible on the recording. Zoom with the + and - buttons (plain scroll scrolls the page; ctrl+scroll also zooms).
+- **If you run long, cut in this order:** the MCP sentence, the "Naseem77 is on leave for two weeks" plain-English chip, the click-through to the created issue. Never cut the trail, the graph exploration, the Cypher tab, the memory before-and-after, or the 93% result.
 
 ## Part 6: If the live site is slow or fails during recording
 
