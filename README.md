@@ -138,6 +138,8 @@ Seven FalkorDB repositories, 542 test PRs from the later part of each repo's his
 
 Keystone beats the strongest classic baseline (file history) on hit@3 by **+5.9 points, 95% bootstrap CI [+3.5, +8.1]**. It wins or ties on every repo; the hardest is `FalkorDB/docs` (hit@3 0.65 vs 0.58 file history). Reading the misses shows why: the docs team's main reviewer changed between the tuning period and the test period, so any method trained on the past is pulled toward people who stopped reviewing. The tuned blend ended up using file history (weight 2) and the author-to-reviewer social edges (weight 0.5) with a 90-day half-life-style decay; the module-hierarchy signal got weight 0 on this data, so it is used for the "who knows this module" tool rather than for reviewer prediction.
 
+![Trust section of the live demo: 93% hit@3, the five-method comparison, and the 3,203 kept vs 1,168 rejected decision proposals](docs/demo-trust.jpg)
+
 Other checks (`python -m keystone.qa_eval`):
 
 * **Tool routing:** the agent chose the right tool on 14 of 14 natural-language questions.
@@ -154,6 +156,16 @@ Other checks (`python -m keystone.qa_eval`):
 * **Decisions are verified, not trusted.** The LLM proposes decisions with a quote. Code keeps a decision only if (1) the quote is a verbatim substring of the cited message and (2) a second check confirms the quote states the decision rather than asking about it. Roughly three in ten proposals are rejected.
 * **Memory changes behaviour.** Rejecting a suggested reviewer creates a scoped, expiring `AVOID` rule in your own graph; the next suggestion for that subtree skips them and the agent tells you why.
 * **Knowledge risk is about modules, not people.** Only public GitHub handles are used; no emails or private data.
+
+Memory in action: telling the agent a reviewer is on leave writes a rule into your own graph, and the same question then returns a different list with the reason.
+
+![Remember: the same question answered again after "Naseem77 is on leave", with the stored rule and the reason](docs/demo-remember.jpg)
+
+Coordination through the graph: a triage agent queues at-risk PRs, a router claims one with a single atomic write, and after human approval an executor opens a real issue in a sandbox repository.
+
+![Act: the shared task queue, one task claimed, and the executor's link to the issue it created](docs/demo-act.jpg)
+
+![The issue the executor opened in the sandbox repository, with the recommended reviewers and their evidence](docs/demo-issue.jpg)
 
 ## Keeping knowledge current
 
@@ -184,6 +196,14 @@ claude mcp add keystone -- python -m keystone.mcp_server
 ```
 
 Google Antigravity: agent panel, `...`, MCP Servers, Manage MCP Servers, View raw config, then paste the same `keystone` block under `mcpServers` (or save it as `.agents/mcp_config.json` in the repository).
+
+The tools and the client configuration are also listed on the page itself:
+
+![How it works section: the six MCP tools and the Claude Desktop, Cursor and Claude Code configuration](docs/demo-mcp-tools.jpg)
+
+The same tools driven from Google Antigravity, which picked the tool, called it and returned the same reviewers with evidence:
+
+![Antigravity calling the keystone MCP server to recommend reviewers for FalkorDB/GraphRAG-SDK#328](docs/demo-antigravity.jpg)
 
 FalkorDB must be reachable (`docker compose up`, or set `FALKORDB_TARGET=cloud` and the `FALKORDB_*` variables). Then ask your agent "Who should review FalkorDB/GraphRAG-SDK#328?" and it will choose `suggest_reviewers`.
 
@@ -221,6 +241,8 @@ Tests: `PYTHONPATH=. pytest -q tests` (unit tests, tenant-id validation, and a c
 ## AI-usage disclosure
 
 This project was built with Claude Code (Anthropic) as the coding assistant, directed and verified by the team. The team is responsible for the architecture, graph model, queries, security and correctness, and can explain each of them. The runtime agent uses OpenAI `gpt-4o-mini` and `text-embedding-3-small`.
+
+The demo video was recorded by the author. Its captions were generated locally with OpenAI Whisper (the `faster-whisper` package, `small.en` model) and corrected for product names.
 
 ## Data and licences
 
