@@ -207,6 +207,25 @@ The same tools driven from Google Antigravity, which picked the tool, called it 
 
 FalkorDB must be reachable (`docker compose up`, or set `FALKORDB_TARGET=cloud` and the `FALKORDB_*` variables). Then ask your agent "Who should review FalkorDB/GraphRAG-SDK#328?" and it will choose `suggest_reviewers`.
 
+## OpenAI usage and cost
+
+Measured with the real agent on the 14 routing questions of `keystone/qa_eval.py`, using the token counts OpenAI returns (`python tests/usage_probe.py` reproduces it):
+
+| Per question | Measured |
+|---|---|
+| Chat calls (`gpt-4o-mini`) | 2 (one to pick the tool, one to write the answer) |
+| Prompt tokens | about 2,240 (range 1,830 to 2,930) |
+| Completion tokens | about 190 |
+| Embedding calls (`text-embedding-3-small`) | 0 or 1 of under 10 tokens, only for topic and decision questions |
+| Cost at $0.15 / $0.60 per 1M input / output tokens | about $0.00045, so roughly $0.45 per 1,000 questions |
+
+![Tokens and cost per question for each of the six tools](docs/openai-usage.png)
+
+* **One-off build:** decision extraction and verification ran on 3,247 PR and issue threads, about 1.9 calls and 950 prompt plus 110 completion tokens each (a 12-thread sample), so roughly 3.1M prompt and 0.36M completion tokens, about $0.70. Embedding the PRs and decisions adds a few cents. The whole graph cost under $1 to build (an estimate from the sample, not an invoice).
+* **Hosted demo cap:** 25 questions per visitor per hour and 400 per day across everyone, so the OpenAI bill is bounded at about $0.20 a day (at most about $0.35 with maximum-length chat history).
+* **Why it stays small:** the model only sees the rows a tool returned, never the raw history, so the prompt stays near 2k tokens whatever the size of the graph.
+* Prices are those listed on OpenAI's pricing page when this was written. OpenAI's model page currently labels `gpt-4o-mini` as deprecated; it worked for every run here and the model name is the `OPENAI_MODEL` setting, so switching is a configuration change.
+
 ## Concurrency
 
 `tests/bench.py` drives the real tools (no LLM) from concurrent threads against local FalkorDB: with 16 threads, 400 calls, **zero errors, about 190 calls/s**; reviewer suggestion p50 178 ms / p95 343 ms, topic expertise p50 11 ms, shortest path p50 4 ms (the risk scan is cached for 5 minutes). Numbers are for one laptop; treat them as order of magnitude.
