@@ -155,6 +155,10 @@ Other checks (`python -m keystone.qa_eval`):
 * **Memory changes behaviour.** Rejecting a suggested reviewer creates a scoped, expiring `AVOID` rule in your own graph; the next suggestion for that subtree skips them and the agent tells you why.
 * **Knowledge risk is about modules, not people.** Only public GitHub handles are used; no emails or private data.
 
+## Keeping knowledge current
+
+The graph is not a one-off load. `python -m keystone.refresh <tenant>` pulls only what changed on GitHub since the last refresh (PRs and issues ordered by last update, stopping at the watermark), upserts it (every write is a `MERGE`, so repeating it is safe), re-extracts and verifies decisions for the new threads, recomputes PageRank and betweenness, and records when it ran and what it picked up. The page shows that under the headline numbers. `--dry-run` reports what would change without writing; `FALKORDB_TARGET=cloud` runs it against FalkorDB Cloud. On our live graph the last refresh added 11 pull requests, updated 2 whose state had changed (open to merged or closed) and added 9 decisions. Run it from cron or CI for a continuously current graph; we run it by hand.
+
 ## MCP server
 
 `python -m keystone.mcp_server` exposes the read-only graph tools (`who_knows`, `suggest_reviewers`, `bus_factor`, `bridges`, `connection`, `why_decision`) over MCP, so any MCP client can pick among them. `tests/mcp_client_check.py` starts it over stdio and calls it like a real client (lists the tools, then asks for reviewers and experts).
