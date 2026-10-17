@@ -165,7 +165,7 @@ Claude Desktop or Cursor (`mcpServers` config):
 { "mcpServers": { "keystone": { "command": "python", "args": ["-m", "keystone.mcp_server"], "env": { "OPENAI_API_KEY": "..." } } } }
 ```
 
-Claude Code, from the repository (a project-scoped `.mcp.json` is included, or run):
+Claude Code (run from the repository, with its virtual environment's `python` so the `mcp` and `falkordb` packages are available):
 
 ```bash
 claude mcp add keystone -- python -m keystone.mcp_server
