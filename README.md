@@ -4,19 +4,19 @@
 
 Keystone turns the public history of a codebase (pull requests, reviews, issues, discussions) into a FalkorDB graph, then puts an agent on top that can answer *"who should review this?"*, *"who actually understands this module?"*, *"which modules would lose knowledge if one person left?"* and *"why did we decide that?"*. Each answer shows the subgraph and the exact Cypher behind it, and every quoted decision is checked against its source text by code before it is shown.
 
-![Keystone: live ask box, track-mapped judges strip](docs/ui-story-1.png)
-
-![The problem: a knowledge map of real modules grouped by repository](docs/ui-story-2.png)
-
-![Ask: the answer, its reasoning trail, graph and Cypher](docs/ui-story-3.png)
-
 Built for **Graph Hacks: Context for AI Agents** (WeMakeDevs x FalkorDB), Oct 15-18 2026.
 Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordination, 3 Company Brain**.
 
 * Live demo: https://keystone-graph.vercel.app (FalkorDB Cloud + Vercel)
 * Demo video: https://youtu.be/HZQ6v4Cha3I
-* A real action taken by the agent after human approval: https://github.com/srinjoy356/keystone-sandbox/issues/1
-* Blog post: _(filled in at submission)_
+* A real action taken by the agent after human approval: [srinjoy356/keystone-sandbox#1](https://github.com/srinjoy356/keystone-sandbox/issues/1)
+* Blog post: (filled in at submission)
+
+![Keystone: live ask box, track-mapped judges strip](docs/ui-story-1.png)
+
+![The problem: a knowledge map of real modules grouped by repository](docs/ui-story-2.png)
+
+![Ask: the answer, its reasoning trail, graph and Cypher](docs/ui-story-3.png)
 
 ## Architecture
 
