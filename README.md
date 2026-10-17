@@ -157,7 +157,15 @@ Other checks (`python -m keystone.qa_eval`):
 
 ## Keeping knowledge current
 
-The graph is not a one-off load. `python -m keystone.refresh <tenant>` pulls only what changed on GitHub since the last refresh (PRs and issues ordered by last update, stopping at the watermark), upserts it (every write is a `MERGE`, so repeating it is safe), re-extracts and verifies decisions for the new threads, recomputes PageRank and betweenness, and records when it ran and what it picked up. The page shows that under the headline numbers. `--dry-run` reports what would change without writing; `FALKORDB_TARGET=cloud` runs it against FalkorDB Cloud. On our live graph the last refresh added 11 pull requests, updated 2 whose state had changed (open to merged or closed) and added 9 decisions. Run it from cron or CI for a continuously current graph; we run it by hand.
+The graph is not a one-off load. `python -m keystone.refresh <tenant>` pulls only what changed on GitHub since the last refresh (PRs and issues ordered by last update, stopping at the watermark), upserts it (every write is a `MERGE`, so repeating it is safe), re-extracts and verifies decisions for the new threads, recomputes PageRank and betweenness, and records when it ran and what it picked up. The page shows that under the headline numbers. `--dry-run` reports what would change without writing. On our live graph the last refresh added 11 pull requests, updated 2 whose state had changed (open to merged or closed) and added 9 decisions. Run it from cron or CI for a continuously current graph; we run it by hand.
+
+```bash
+python -m keystone.refresh falkordb --cloud   # one command: updates the LIVE graph in FalkorDB Cloud
+python -m keystone.refresh falkordb           # same, for the local Docker graph
+python -m keystone.refresh falkordb --cloud --dry-run   # report what would change, write nothing
+```
+
+The deployed site reads FalkorDB Cloud directly, so new data appears without a redeploy. Only the offline fallback copy used when the backend is slow (`public/snapshot.json`) is rebuilt at deploy time with `python -m keystone.snapshot`.
 
 ## MCP server
 

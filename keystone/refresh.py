@@ -1,8 +1,9 @@
 """Incremental refresh: pull only what changed on GitHub since the last refresh, upsert it into the tenant graph,
 re-extract decisions for the new threads, and recompute the derived layer.
-    python -m keystone.refresh <tenant> [--dry-run] [--no-decisions]
-Run it against local FalkorDB, or against Cloud with FALKORDB_TARGET=cloud. Safe to repeat: every write is a MERGE."""
-import json, sys, time
+    python -m keystone.refresh <tenant> [--cloud] [--dry-run] [--no-decisions]
+--cloud updates the live FalkorDB Cloud graph (the deployed site reads it directly); without it the local Docker graph is updated.
+Safe to repeat: every write is a MERGE."""
+import json, os, sys, time
 from . import decisions, embed_prs, github, load, load_decisions
 from .db import kb, ro
 from .derive import derive
@@ -63,6 +64,8 @@ def refresh(tenant: str, dry_run: bool = False, with_decisions: bool = True) -> 
 
 
 if __name__ == "__main__":
+    if "--cloud" in sys.argv:  # the db connection is created lazily, so this must be set before the first query
+        os.environ["FALKORDB_TARGET"] = "cloud"
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     res = refresh(args[0], "--dry-run" in sys.argv, "--no-decisions" not in sys.argv)
     for repo, s in res.items():

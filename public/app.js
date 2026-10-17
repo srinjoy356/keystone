@@ -255,7 +255,7 @@ function renderStats() {
   $('#stats').innerHTML = cells.map(([v, l]) => `<div><b>${v}</b><span class="label">${l}</span></div>`).join('')
   if (OV && OV.asof) { const when = new Date(OV.asof * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const r = OV.refresh ? Object.values(OV.refresh).reduce((a, x) => ({ n: a.n + x.new_prs, c: a.c + x.state_changes }), { n: 0, c: 0 }) : null;
-    $('#asof').innerHTML = `Graph data as of ${esc(when)}` + (r ? ` &middot; last refresh added ${r.n} new PRs and updated ${r.c} changed ones` : '') + ' &middot; refresh with <span class="mono">python -m keystone.refresh falkordb</span>' }
+    $('#asof').innerHTML = `Graph data as of ${esc(when)}` + (r ? ` &middot; last refresh added ${r.n} new PRs and updated ${r.c} changed ones` : '') + ' &middot; one command updates the live graph: <span class="mono">python -m keystone.refresh falkordb --cloud</span>' }
 }
 function applyConfig() {
   const v = CONFIG.videoUrl; if (v) { let src = v; const m = v.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/); if (m) src = 'https://www.youtube.com/embed/' + m[1];
