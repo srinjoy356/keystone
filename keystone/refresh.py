@@ -1,6 +1,6 @@
 """Incremental refresh: pull only what changed on GitHub since the last refresh, upsert it into the tenant graph,
 re-extract decisions for the new threads, and recompute the derived layer.
-    python -m keystone.refresh <tenant> [--cloud] [--dry-run] [--no-decisions]
+    python -m keystone.refresh <tenant> [--cloud] [--dry-run] [--no-decisions] [--since YYYY-MM-DD]
 --cloud updates the live FalkorDB Cloud graph (the deployed site reads it directly); without it the local Docker graph is updated.
 Safe to repeat: every write is a MERGE."""
 import json, os, sys, time
@@ -26,10 +26,10 @@ def watermark(g, repo: str) -> int:
     return int(m[0][0] or 0) - DAY
 
 
-def refresh(tenant: str, dry_run: bool = False, with_decisions: bool = True) -> dict:
+def refresh(tenant: str, dry_run: bool = False, with_decisions: bool = True, since_override: int = 0) -> dict:
     g, started, summary = kb(tenant), int(time.time()), {}
     for repo in repos_of(g):
-        since = watermark(g, repo)
+        since = since_override or watermark(g, repo)
         prs = github.fetch_updated(repo, since, "pullRequests")
         issues = github.fetch_updated(repo, since, "issues")
         pids = [f"{repo}#{p['number']}" for p in prs]
@@ -66,8 +66,13 @@ def refresh(tenant: str, dry_run: bool = False, with_decisions: bool = True) -> 
 if __name__ == "__main__":
     if "--cloud" in sys.argv:  # the db connection is created lazily, so this must be set before the first query
         os.environ["FALKORDB_TARGET"] = "cloud"
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    res = refresh(args[0], "--dry-run" in sys.argv, "--no-decisions" not in sys.argv)
+    argv, since = sys.argv[1:], 0
+    if "--since" in argv:  # look further back than the watermark, e.g. for a dry-run demo
+        i = argv.index("--since")
+        since = int(time.mktime(time.strptime(argv[i + 1], "%Y-%m-%d")))
+        del argv[i:i + 2]
+    args = [a for a in argv if not a.startswith("--")]
+    res = refresh(args[0], "--dry-run" in argv, "--no-decisions" not in argv, since)
     for repo, s in res.items():
         print(f"{repo:34} new PRs {s['new_prs']:3}  state changes {s['state_changes']:3}  PRs seen {s['prs_seen']:3}  new issues {s['new_issues']:3}  new decisions {s['new_decisions']:3}  (since {s['since']} UTC)")
     print("dry run, nothing written" if "--dry-run" in sys.argv else "refreshed")
