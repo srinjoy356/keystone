@@ -14,7 +14,7 @@ Built for **Graph Hacks: Context for AI Agents** (WeMakeDevs x FalkorDB), Oct 15
 Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordination, 3 Company Brain**.
 
 * Live demo: https://keystone-graph.vercel.app (FalkorDB Cloud + Vercel)
-* Demo video: _(filled in at submission)_
+* Demo video: https://youtu.be/HZQ6v4Cha3I
 * A real action taken by the agent after human approval: https://github.com/srinjoy356/keystone-sandbox/issues/1
 * Blog post: _(filled in at submission)_
 
