@@ -17,7 +17,7 @@ def embed(texts: list[str]) -> list[list[float]]:
     return out
 
 
-def load(tenant: str, repo: str, kind: str = "prs") -> int:
+def load(tenant: str, repo: str, kind: str = "prs", only: set | None = None) -> int:
     g = kb(tenant)
     try:
         g.query(f"CREATE VECTOR INDEX FOR (d:Decision) ON (d.emb) OPTIONS {{dimension:{DIM}, similarityFunction:'cosine'}}")
@@ -28,6 +28,8 @@ def load(tenant: str, repo: str, kind: str = "prs") -> int:
     data = json.loads((OUT / (repo.replace("/", "__") + ("" if kind == "prs" else "__issues") + ".json")).read_text())
     rows = []
     for pid, v in data.items():
+        if only is not None and pid not in only:
+            continue
         for d in v["decisions"]:
             did = hashlib.sha1(f"{pid}|{d['quote']}".encode()).hexdigest()[:12]
             rows.append({"id": did, "pr": pid, "title": v["title"], "text": d["decision"], "why": d.get("rationale", ""), "quote": d["quote"],

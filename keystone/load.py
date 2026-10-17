@@ -70,9 +70,14 @@ def ensure_indexes(g):
 
 
 def load_repo(tenant: str, repo: str, batch: int = 100) -> dict:
+    return load_prs(tenant, repo, list(iter_prs(repo)), batch)
+
+
+def load_prs(tenant: str, repo: str, prs: list, batch: int = 100) -> dict:
+    """Idempotent upsert of PR dicts, whether they come from the cache or from a live refresh."""
     g = kb(tenant)
     ensure_indexes(g)
-    rows = [pr_rows(repo, p) for p in iter_prs(repo)]
+    rows = [pr_rows(repo, p) for p in prs]
     people = sorted({x for r in rows for x in ([r["author"]] if r["author"] else []) + [v["u"] for v in r["reviews"]] + r["comments"]})
     g.query(STMTS["people"], {"rows": people})
     for i in range(0, len(rows), batch):
@@ -91,11 +96,15 @@ def load_repo(tenant: str, repo: str, batch: int = 100) -> dict:
 
 
 def load_issues(tenant: str, repo: str) -> int:
+    return load_issue_nodes(tenant, repo, list(iter_prs(repo, kind="issues")))
+
+
+def load_issue_nodes(tenant: str, repo: str, issues: list) -> int:
     """Issues are the 'tickets' source: opener and commenters link to people, and decisions can be traced to them."""
     g = kb(tenant)
     ensure_indexes(g)
     rows = []
-    for i in iter_prs(repo, kind="issues"):
+    for i in issues:
         author = human(i["author"])
         rows.append({"id": f"{repo}#{i['number']}", "title": i["title"], "url": i["url"], "state": i["state"], "createdAt": ts(i["createdAt"]),
                      "author": author, "commenters": sorted({u for c in i["comments"]["nodes"] if (u := human(c["author"])) and u != author})})

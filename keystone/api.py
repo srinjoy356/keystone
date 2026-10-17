@@ -205,7 +205,9 @@ def overview(tenant: str = "falkordb"):
     linked = {x for r in links for x in r[:2]}  # isolated contributors would only be dots in rows: show the connected network
     nodes = [p for p in people if p[0] in linked][:90]
     ids = {p[0] for p in nodes}
-    return {"stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in nodes],
+    meta = ro(g, "MATCH (m:Meta {id:'refresh'}) RETURN m.at, m.summary")
+    asof = meta[0][0] if meta else ro(g, "MATCH (p:PR) RETURN max(p.createdAt)")[0][0]
+    return {"asof": asof, "refresh": json.loads(meta[0][1]) if meta and meta[0][1] else None, "stats": stats, "nodes": [{"id": a, "community": b, "pagerank": c, "acts": d} for a, b, c, d in nodes],
             "edges": [{"source": a, "target": b, "n": n} for a, b, n in links if a in ids and b in ids]}
 
 

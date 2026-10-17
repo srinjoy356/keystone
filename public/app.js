@@ -253,6 +253,9 @@ function renderStats() {
   const s = (OV && OV.stats) || {}, e = EVAL && EVAL.test && EVAL.test['KEYSTONE (graph blend)'], f = EVAL && EVAL.facts && EVAL.facts.decisions;
   const cells = [[(s.PR || 0).toLocaleString(), 'Pull requests in the graph'], [(s.Decision || 0).toLocaleString(), 'Decisions traced to a source'], [e ? pct(e['hit@3']) + '%' : '-', 'Top-3 reviewer accuracy, held out'], [f ? Math.round(f.rejected / f.proposed * 100) + '%' : '-', 'Model proposals rejected by code']];
   $('#stats').innerHTML = cells.map(([v, l]) => `<div><b>${v}</b><span class="label">${l}</span></div>`).join('')
+  if (OV && OV.asof) { const when = new Date(OV.asof * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const r = OV.refresh ? Object.values(OV.refresh).reduce((a, x) => ({ n: a.n + x.new_prs, c: a.c + x.state_changes }), { n: 0, c: 0 }) : null;
+    $('#asof').innerHTML = `Graph data as of ${esc(when)}` + (r ? ` &middot; last refresh added ${r.n} new PRs and updated ${r.c} changed ones` : '') + ' &middot; refresh with <span class="mono">python -m keystone.refresh falkordb</span>' }
 }
 function applyConfig() {
   const v = CONFIG.videoUrl; if (v) { let src = v; const m = v.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/); if (m) src = 'https://www.youtube.com/embed/' + m[1];

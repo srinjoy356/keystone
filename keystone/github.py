@@ -77,6 +77,31 @@ def fetch_repo(full_name: str, since: str = "2023-01-01", kind: str = "pullReque
     return n
 
 
+def _epoch(iso: str) -> int:
+    return int(time.mktime(time.strptime(iso, "%Y-%m-%dT%H:%M:%SZ")) - time.timezone)
+
+
+def fetch_updated(full_name: str, since_epoch: int, kind: str = "pullRequests") -> list:
+    """Items (PRs or issues) updated at or after `since_epoch`, newest-updated first, stopping at the first older one."""
+    owner, name = full_name.split("/")
+    q = (QUERY if kind == "pullRequests" else ISSUE_QUERY).replace("field:CREATED_AT", "field:UPDATED_AT").replace("createdAt ", "createdAt updatedAt ", 1)
+    out, after = [], None
+    with httpx.Client(headers={"Authorization": f"Bearer {env('GITHUB_TOKEN')}"}, timeout=60) as client:
+        while True:
+            data = _post(client, {"owner": owner, "name": name, "after": after}, q)
+            conn, stop = data["repository"][kind], False
+            for n in conn["nodes"]:
+                if _epoch(n["updatedAt"]) < since_epoch:
+                    stop = True
+                    break
+                out.append(n)
+            if data["rateLimit"]["remaining"] < 150:  # wait for the hourly window instead of failing
+                time.sleep(max(5, _epoch(data["rateLimit"]["resetAt"]) - int(time.time())) + 5)
+            if stop or not conn["pageInfo"]["hasNextPage"]:
+                return out
+            after = conn["pageInfo"]["endCursor"]
+
+
 def iter_prs(full_name: str, kind: str = "prs"):
     owner, name = full_name.split("/")
     base = RAW if kind == "prs" else RAW.parent / "raw_issues"
