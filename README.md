@@ -10,7 +10,7 @@ Tracks entered: **1 Agents That Act on Connected Data, 2 Agent Memory and Coordi
 * Live demo: https://keystone-graph.vercel.app (FalkorDB Cloud + Vercel)
 * Demo video: https://youtu.be/HZQ6v4Cha3I
 * A real action taken by the agent after human approval: [srinjoy356/keystone-sandbox#1](https://github.com/srinjoy356/keystone-sandbox/issues/1)
-* Blog post: (filled in at submission)
+* Blog post: https://medium.com/@srinjoy356/i-hid-the-reviewers-and-asked-a-graph-to-guess-them-keystone-on-falkordb-6d12acb73a22
 
 ![Keystone: live ask box, track-mapped judges strip](docs/ui-story-1.png)
 
