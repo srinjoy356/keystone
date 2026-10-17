@@ -15,3 +15,5 @@ important_.txt
 Dockerfile
 docker-compose.yml
 __pycache__
+private
+data/shots
