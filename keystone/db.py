@@ -2,6 +2,7 @@
 import re, contextvars
 from falkordb import FalkorDB
 from .config import env
+from .tracing import span
 
 _db = None
 QUERY_LOG: contextvars.ContextVar = contextvars.ContextVar("query_log", default=None)
@@ -32,7 +33,11 @@ def kb(tenant: str = "falkordb"):
 def ro(graph, cypher: str, params: dict | None = None, timeout_ms: int = 5000):
     """Read-only, parameterised, time-limited. GRAPH.RO_QUERY makes the server reject any write."""
     log = QUERY_LOG.get()
-    res = graph.ro_query(cypher, params or {}, timeout=timeout_ms)
+    with span("falkordb.query", **{"db.system": "falkordb", "db.operation": "GRAPH.RO_QUERY", "db.query.text": " ".join(cypher.split())[:200]}) as sp:
+        res = graph.ro_query(cypher, params or {}, timeout=timeout_ms)
+        if sp:
+            sp.set_attribute("db.rows", len(res.result_set))
+            sp.set_attribute("db.run_time_ms", res.run_time_ms)
     if log is not None:
         log.append({"cypher": " ".join(cypher.split()), "rows": len(res.result_set), "ms": res.run_time_ms})
     return res.result_set

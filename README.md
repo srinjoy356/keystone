@@ -226,6 +226,27 @@ Measured with the real agent on the 14 routing questions of `keystone/qa_eval.py
 * **Why it stays small:** the model only sees the rows a tool returned, never the raw history, so the prompt stays near 2k tokens whatever the size of the graph.
 * Prices are those listed on OpenAI's pricing page when this was written. OpenAI's model page currently labels `gpt-4o-mini` as deprecated; it worked for every run here and the model name is the `OPENAI_MODEL` setting, so switching is a configuration change.
 
+## Tracing a question (optional, SigNoz)
+
+`keystone/tracing.py` emits OpenTelemetry spans for every question: `agent.ask` at the root, one `llm.chat` span per OpenAI call with its token counts (`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`), one `tool.<name>` span per tool call, and one `falkordb.query` span per Cypher query with the query text, row count and run time. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and without the extra packages it does nothing, so the deployed app is unaffected:
+
+```bash
+pip install -r requirements-otel.txt
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 python tests/usage_probe.py   # or run the API; a local SigNoz listens on 4318
+```
+
+Below is one real question ("Who should review FalkorDB/GraphRAG-SDK#328?") in a local SigNoz. It took 8.3 s end to end: the two `llm.chat` calls took 3.6 s and 3.9 s, and the whole graph step, seven Cypher queries inside `tool.suggest_reviewers`, took 471 ms. So most of a question's time is the language model, not FalkorDB. This was the first question after start-up; the 14 probe questions ran 1.6 to 6.5 s each when warm.
+
+![SigNoz waterfall of one question: agent.ask, two llm.chat calls, and the tool call with its seven FalkorDB queries](docs/signoz-trace.png)
+
+Opening an `llm.chat` span shows the model and the exact token counts OpenAI reported (891 input, 27 output for the tool-choosing call):
+
+![SigNoz span details for an llm.chat call: gpt-4o-mini, 891 input tokens, 27 output tokens](docs/signoz-llm-span.png)
+
+Each `falkordb.query` span carries the Cypher that ran, how many rows it returned and the server-reported run time:
+
+![SigNoz span details for a falkordb.query span: the Cypher text, 3 rows, run time in milliseconds](docs/signoz-cypher-span.png)
+
 ## Concurrency
 
 `tests/bench.py` drives the real tools (no LLM) from concurrent threads against local FalkorDB: with 16 threads, 400 calls, **zero errors, about 190 calls/s**; reviewer suggestion p50 178 ms / p95 343 ms, topic expertise p50 11 ms, shortest path p50 4 ms (the risk scan is cached for 5 minutes). Numbers are for one laptop; treat them as order of magnitude.

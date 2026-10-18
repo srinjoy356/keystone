@@ -3,6 +3,7 @@ import inspect, json, time
 from openai import OpenAI
 from .config import env
 from .db import QUERY_LOG
+from .tracing import span
 from . import mem
 from .tools import TOOLS
 
@@ -59,14 +60,23 @@ def call_tool(tenant: str, name: str, args: dict, user: str | None = None):
         return {"data": {"error": f"{type(e).__name__}: {str(e)[:200]}"}, "evidence": {"nodes": [], "edges": []}, "cypher": name}
 
 
-def ask(tenant: str, question: str, user: str | None = None, history: list[dict] | None = None, max_rounds: int = 4, on_event=None) -> dict:
+def ask(tenant: str, question: str, *a, **kw) -> dict:
+    with span("agent.ask", **{"keystone.tenant": tenant, "keystone.question": question[:120]}):
+        return _ask(tenant, question, *a, **kw)
+
+
+def _ask(tenant: str, question: str, user: str | None = None, history: list[dict] | None = None, max_rounds: int = 4, on_event=None) -> dict:
     client, model = OpenAI(api_key=env("OPENAI_API_KEY")), env("OPENAI_MODEL", "gpt-4o-mini")
     msgs = [{"role": "system", "content": SYSTEM.format(today=time.strftime("%Y-%m-%d"))}, *(history or []), {"role": "user", "content": question}]
     trace, nodes, edges, structured = [], {}, [], {}
     emit = on_event or (lambda e: None)  # real progress for the UI: which step the agent is actually on
     for rd in range(max_rounds):
         emit({"e": "llm", "round": rd})
-        r = client.chat.completions.create(model=model, messages=msgs, tools=SPECS, temperature=0)
+        with span("llm.chat", **{"gen_ai.system": "openai", "gen_ai.request.model": model, "keystone.round": rd}) as sp:
+            r = client.chat.completions.create(model=model, messages=msgs, tools=SPECS, temperature=0)
+            if sp:
+                sp.set_attribute("gen_ai.usage.input_tokens", r.usage.prompt_tokens)
+                sp.set_attribute("gen_ai.usage.output_tokens", r.usage.completion_tokens)
         m = r.choices[0].message
         if not m.tool_calls:
             if user:
@@ -79,9 +89,12 @@ def ask(tenant: str, question: str, user: str | None = None, history: list[dict]
             emit({"e": "tool", "name": c.function.name, "args": args})
             log, tok = [], QUERY_LOG.set([])
             t = time.time()
-            res = call_tool(tenant, c.function.name, args, user)
+            with span("tool." + c.function.name, **{"keystone.args": json.dumps(args)[:200]}) as sp:
+                res = call_tool(tenant, c.function.name, args, user)
+                log = QUERY_LOG.get()
+                if sp:
+                    sp.set_attribute("keystone.cypher_queries", len(log))
             structured[c.function.name] = res["data"]
-            log = QUERY_LOG.get()
             QUERY_LOG.reset(tok)
             trace.append({"tool": c.function.name, "args": args, "ms": int((time.time() - t) * 1000), "queries": log})
             emit({"e": "tool_done", "name": c.function.name, "ms": trace[-1]["ms"], "queries": len(log)})

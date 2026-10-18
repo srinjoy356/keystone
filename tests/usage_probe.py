@@ -40,3 +40,6 @@ print(f"per question: {per['chat_calls']} chat calls, {per['pin']:.0f} prompt to
 assert per["chat_calls"] <= 4, "agent used more rounds than expected"
 (ROOT / "data").mkdir(exist_ok=True)
 (ROOT / "data" / "usage_probe.json").write_text(json.dumps({"rows": rows, "per_question": per}))
+
+from keystone.tracing import flush  # no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set
+flush()
